@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Trial Room
 
-## Getting Started
+Take a photo of a person and a photo of a garment, say who is wearing it and what it is, and get back a picture of that person wearing the garment.
 
-First, run the development server:
+The fitting is done by the [IDM-VTON](https://replicate.com/cuuupid/idm-vton) model on Replicate. The site itself stores nothing: photos go from the browser to the model and the finished picture comes back.
+
+## Run it locally
 
 ```bash
+npm install
+cp .env.example .env.local   # then paste your Replicate token into it
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. The camera only works on `localhost` or over HTTPS.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Required | What it is |
+| --- | --- | --- |
+| `REPLICATE_API_TOKEN` | yes | API token from https://replicate.com/account/api-tokens |
 
-## Learn More
+Every try-on is billed to that Replicate account. The site is open to anyone with the link, so set a monthly spend limit on the Replicate account.
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The project deploys to Vercel as a standard Next.js app. Add `REPLICATE_API_TOKEN` under Project Settings, Environment Variables, then redeploy.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## How it works
 
-## Deploy on Vercel
+| Path | Role |
+| --- | --- |
+| `src/components/TrialRoom.tsx` | The page: two photo slots, the choices, the result |
+| `src/components/CameraModal.tsx` | In-browser camera with a 3:4 viewfinder |
+| `src/lib/image.ts` | Shrinks photos in the browser before they are sent |
+| `src/lib/garments.ts` | Garment types and which model category each maps to |
+| `src/lib/replicate.ts` | Server-side Replicate client |
+| `src/app/api/tryon/route.ts` | `POST` starts a try-on and returns its id |
+| `src/app/api/tryon/[id]/route.ts` | `GET` reports progress, `DELETE` cancels |
+| `src/app/api/tryon/[id]/download/route.ts` | Serves the finished picture as a file download |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The browser starts a try-on, then asks for its status every 1.5 seconds until the picture is ready. The first try-on after a quiet period is slower, because the model has to start up.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Photo tips
+
+- Person: one person, standing straight, facing the camera, head to hips in view.
+- Garment: laid flat or on a hanger, the whole garment in view, plain background.
+- The model's main weights are for tops (shirt, T-shirt, coat, jacket). Trousers, skirts and dresses run on its second, DressCode weights.
