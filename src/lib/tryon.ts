@@ -119,9 +119,10 @@ function resetIn(raw: string): string {
  */
 export function quotaMessage(raw: string, category: Category): string | null {
   if (!/quota|runs limit/i.test(raw)) return null;
-  const left = Number(raw.match(/vs\.\s*(\d+)s left/i)?.[1] ?? 0);
-  if (category !== "upper_body" && left >= 60) {
-    return `Trousers, skirts and dresses need the whole day's free allowance, and part of it is already used on this network. Tops still work.${resetIn(raw)}`;
+  if (category !== "upper_body") {
+    // These only run on the server that needs the whole allowance, so
+    // being refused here says nothing about tops.
+    return `Today's free allowance for trousers, skirts and dresses is used up on this network. Tops may still work.${resetIn(raw)}`;
   }
   return `Today's free try-ons on this network are used up.${resetIn(raw)}`;
 }
