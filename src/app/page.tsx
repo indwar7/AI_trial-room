@@ -20,8 +20,8 @@ export default function Home() {
 
       <footer className="foot">
         <p>
-          Photos are sent to the AI model only to make this picture. This site does not keep
-          them.
+          Photos are sent to a public AI demo server on Hugging Face to make this picture. This
+          site does not keep them. Free try-ons are limited each day.
         </p>
       </footer>
     </>

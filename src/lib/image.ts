@@ -20,7 +20,7 @@ interface Region {
   height: number;
 }
 
-/** The model works at 768 x 1024, so nothing larger than this is useful. */
+/** The models work at 768 x 1024, so nothing much larger than this is useful. */
 const PERSON_LONG_SIDE = 1280;
 const GARMENT_WIDTH = 768;
 const GARMENT_HEIGHT = 1024;
@@ -48,8 +48,8 @@ function prepare(source: Source, region: Region, kind: PhotoKind): Photo {
   }
 
   if (kind === "garment") {
-    // The model stretches the garment photo to 768 x 1024 whatever its
-    // shape, so it is fitted whole onto a 3:4 white card first.
+    // The models expect a 768 x 1024 garment photo, so it is fitted whole
+    // onto a 3:4 white card rather than stretched.
     const { canvas, ctx } = canvasOf(GARMENT_WIDTH, GARMENT_HEIGHT);
     const scale = Math.min(GARMENT_WIDTH / region.width, GARMENT_HEIGHT / region.height);
     const w = Math.round(region.width * scale);
@@ -66,12 +66,52 @@ function prepare(source: Source, region: Region, kind: PhotoKind): Photo {
     };
   }
 
-  const scale = Math.min(1, PERSON_LONG_SIDE / Math.max(region.width, region.height));
-  const width = Math.round(region.width * scale);
-  const height = Math.round(region.height * scale);
+  // A photo wider than 3:4 loses its sides, so the person fills the frame
+  // the model works in. A taller photo is kept whole.
+  let { x, width: rw } = region;
+  const { y, height: rh } = region;
+  if (rw / rh > FRAME_RATIO) {
+    const kept = Math.round(rh * FRAME_RATIO);
+    x += Math.round((rw - kept) / 2);
+    rw = kept;
+  }
+
+  const scale = Math.min(1, PERSON_LONG_SIDE / Math.max(rw, rh));
+  const width = Math.round(rw * scale);
+  const height = Math.round(rh * scale);
   const { canvas, ctx } = canvasOf(width, height);
-  ctx.drawImage(source, region.x, region.y, region.width, region.height, 0, 0, width, height);
+  ctx.drawImage(source, x, y, rw, rh, 0, 0, width, height);
   return { dataUrl: canvas.toDataURL("image/jpeg", JPEG_QUALITY), width, height };
+}
+
+export async function photoToBlob(photo: Photo): Promise<Blob> {
+  return (await fetch(photo.dataUrl)).blob();
+}
+
+/**
+ * Turns the model's picture into a JPEG. When `contentRatio` is given, the
+ * model padded a tall photo with white side bars to reach 3:4, and those
+ * bars are cut off again.
+ */
+export async function finishPicture(picture: Blob, contentRatio: number | null): Promise<Blob> {
+  const img = await loadImage(picture);
+  const h = img.naturalHeight;
+  let w = img.naturalWidth;
+  let x = 0;
+  if (contentRatio !== null && contentRatio < w / h - 0.01) {
+    const kept = Math.round(h * contentRatio);
+    x = Math.round((w - kept) / 2);
+    w = kept;
+  }
+  const { canvas, ctx } = canvasOf(w, h);
+  ctx.drawImage(img, x, 0, w, h, 0, 0, w, h);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("The picture could not be saved."))),
+      "image/jpeg",
+      0.92,
+    );
+  });
 }
 
 function loadImage(file: Blob): Promise<HTMLImageElement> {

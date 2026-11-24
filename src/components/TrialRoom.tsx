@@ -3,28 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { GENDERS, typesFor, type Gender } from "@/lib/garments";
 import type { Photo } from "@/lib/image";
+import { runTryOn, type Stage } from "@/lib/tryon";
 import PhotoSlot from "./PhotoSlot";
 import { DownloadIcon, HangerMark, PersonMark } from "./icons";
 
 type Run =
   | { phase: "idle" }
-  | { phase: "sending" }
-  | { phase: "working"; id: string; status: "starting" | "processing"; progress: number | null }
-  | { phase: "done"; id: string; url: string }
+  | { phase: "working"; stage: Stage }
+  | { phase: "done"; url: string }
   | { phase: "error"; message: string };
-
-interface StatusReply {
-  status?: "starting" | "processing" | "succeeded" | "failed" | "canceled";
-  progress?: number | null;
-  output?: string | null;
-  error?: string | null;
-}
-
-const POLL_MS = 1500;
-const GIVE_UP_MS = 8 * 60 * 1000;
-const MAX_MISSED_POLLS = 6;
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function clock(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -38,13 +25,15 @@ export default function TrialRoom() {
   const [run, setRun] = useState<Run>({ phase: "idle" });
   const [elapsed, setElapsed] = useState(0);
 
-  /** Bumped to abandon whichever try-on is in flight. */
-  const ticket = useRef(0);
+  /** Stops whichever try-on is in flight. */
+  const inFlight = useRef<AbortController | null>(null);
+  /** The picture on screen, held so it can be released. */
+  const pictureUrl = useRef<string | null>(null);
   const resultRef = useRef<HTMLElement>(null);
 
   const types = typesFor(gender);
   const type = types.find((t) => t.id === typeId) ?? null;
-  const busy = run.phase === "sending" || run.phase === "working";
+  const busy = run.phase === "working";
 
   const missing = [
     !person && "a photo of the person",
@@ -53,7 +42,13 @@ export default function TrialRoom() {
     !type && "the garment type",
   ].filter(Boolean) as string[];
 
-  useEffect(() => () => void ticket.current++, []);
+  useEffect(
+    () => () => {
+      inFlight.current?.abort();
+      if (pictureUrl.current) URL.revokeObjectURL(pictureUrl.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!busy) return;
@@ -75,74 +70,30 @@ export default function TrialRoom() {
 
   async function start() {
     if (!person || !garment || !gender || !type || busy) return;
-    const mine = ++ticket.current;
-    const current = () => ticket.current === mine;
+    const controller = new AbortController();
+    inFlight.current = controller;
+    const current = () => inFlight.current === controller && !controller.signal.aborted;
 
     setElapsed(0);
-    setRun({ phase: "sending" });
+    setRun({ phase: "working", stage: { step: "connecting" } });
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     resultRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
 
     try {
-      const res = await fetch("/api/tryon", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          person: person.dataUrl,
-          garment: garment.dataUrl,
-          gender,
-          type: type.id,
-        }),
+      const picture = await runTryOn({
+        person,
+        garment,
+        gender,
+        type,
+        signal: controller.signal,
+        onStage: (stage) => {
+          if (current()) setRun({ phase: "working", stage });
+        },
       });
-      const created = (await res.json().catch(() => null)) as { id?: string; error?: string } | null;
       if (!current()) return;
-      if (!res.ok || !created?.id) {
-        throw new Error(created?.error ?? "The try-on could not be started. Try again.");
-      }
-
-      const id = created.id;
-      setRun({ phase: "working", id, status: "starting", progress: null });
-
-      const began = Date.now();
-      let missed = 0;
-      while (current()) {
-        await sleep(POLL_MS);
-        if (!current()) return;
-
-        let reply: StatusReply | null = null;
-        let ok = false;
-        try {
-          const poll = await fetch(`/api/tryon/${id}`, { cache: "no-store" });
-          reply = (await poll.json().catch(() => null)) as StatusReply | null;
-          ok = poll.ok;
-        } catch {
-          // A dropped connection on a phone; the try-on itself is still running.
-        }
-        if (!current()) return;
-
-        if (!ok || !reply?.status) {
-          if (++missed >= MAX_MISSED_POLLS) {
-            throw new Error(reply?.error ?? "Lost contact with the AI service. Check your connection and try again.");
-          }
-          continue;
-        }
-        missed = 0;
-
-        if (reply.status === "succeeded" && reply.output) {
-          setRun({ phase: "done", id, url: reply.output });
-          return;
-        }
-        if (reply.status === "starting" || reply.status === "processing") {
-          setRun({ phase: "working", id, status: reply.status, progress: reply.progress ?? null });
-        } else {
-          throw new Error(reply.error ?? "The AI could not finish this try-on. Try again.");
-        }
-
-        if (Date.now() - began > GIVE_UP_MS) {
-          void fetch(`/api/tryon/${id}`, { method: "DELETE" }).catch(() => undefined);
-          throw new Error("This is taking too long. Try again in a minute.");
-        }
-      }
+      if (pictureUrl.current) URL.revokeObjectURL(pictureUrl.current);
+      pictureUrl.current = URL.createObjectURL(picture);
+      setRun({ phase: "done", url: pictureUrl.current });
     } catch (err) {
       if (!current()) return;
       setRun({
@@ -153,22 +104,18 @@ export default function TrialRoom() {
   }
 
   function cancel() {
-    ticket.current++;
-    if (run.phase === "working") {
-      void fetch(`/api/tryon/${run.id}`, { method: "DELETE" }).catch(() => undefined);
-    }
+    inFlight.current?.abort();
+    inFlight.current = null;
     setRun({ phase: "idle" });
   }
 
   let statusLine = "";
-  if (run.phase === "sending") statusLine = "Sending the photos…";
   if (run.phase === "working") {
-    statusLine =
-      run.status === "starting"
-        ? "Waking the AI. The first try-on can take a minute or two."
-        : "Fitting the garment…";
+    const { stage } = run;
+    if (stage.step === "connecting") statusLine = "Connecting to the free AI server…";
+    else if (stage.step === "queued") statusLine = `In the queue, ${stage.ahead} ahead of you…`;
+    else statusLine = "Fitting the garment…";
   }
-  const percent = run.phase === "working" && run.status === "processing" ? run.progress : null;
 
   return (
     <main className="room">
@@ -303,21 +250,11 @@ export default function TrialRoom() {
         <div className="result__status" aria-live="polite">
           {busy && (
             <>
-              <div
-                className={percent === null ? "meter meter--waiting" : "meter"}
-                role="progressbar"
-                aria-label="Try-on progress"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={percent ?? undefined}
-              >
-                <span style={percent === null ? undefined : { width: `${Math.max(percent, 4)}%` }} />
+              <div className="meter meter--waiting" role="progressbar" aria-label="Try-on progress">
+                <span />
               </div>
               <p className="result__line">
-                <span>
-                  {statusLine}
-                  {percent !== null && ` ${percent}%`}
-                </span>
+                <span>{statusLine}</span>
                 <span className="result__clock">{clock(elapsed)}</span>
               </p>
               <button type="button" className="btn btn--quiet" onClick={cancel}>
@@ -333,7 +270,7 @@ export default function TrialRoom() {
           )}
 
           {run.phase === "done" && (
-            <a className="btn btn--primary" href={`/api/tryon/${run.id}/download`} download>
+            <a className="btn btn--primary" href={run.url} download="trial-room.jpg">
               <DownloadIcon />
               Download the picture
             </a>
