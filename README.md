@@ -2,7 +2,19 @@
 
 Take a photo of a person and a photo of a garment, say who is wearing it and what it is, and get back a picture of that person wearing the garment.
 
-It is free to run: no API key, no billing, no server code. The browser sends the two photos straight to public AI demo servers on Hugging Face and shows the picture that comes back. The site itself stores nothing.
+It is free to run: no AI API key and no billing. The browser sends the two photos straight to public AI demo servers on Hugging Face and shows the picture that comes back. The site itself stores nothing.
+
+## Logins
+
+The trial room is behind a sign-in. There is no registration: a store asks for a login from the sign-in screen (name, store, phone), and we create it.
+
+- `/admin` lists the requests and the stores that have a login. It opens with the admin key.
+- Creating a login makes a password and shows it once, with a ready WhatsApp message for the store. A login can be turned off, given a new password, or deleted. Turning it off or resetting the password signs the store out everywhere.
+- Logins and requests are small JSON files in a private Vercel Blob store. Passwords are stored hashed.
+
+Environment variables on Vercel: `BLOB_READ_WRITE_TOKEN` (added by the Blob store), `ADMIN_KEY` and `SESSION_SECRET` (each 24 characters or more). For local work, `vercel env pull` brings the Blob token; add the other two to `.env.local` yourself.
+
+The sign-in keeps other people out of the app. The try-on itself still runs between the browser and the public demo servers.
 
 ## The free limit
 
@@ -24,7 +36,7 @@ Open http://localhost:3000. The camera only works on `localhost` or over HTTPS.
 
 ## Deploy
 
-A standard Next.js app with no environment variables. Pushing to `main` redeploys it on Vercel.
+A standard Next.js app. It needs the three environment variables listed under Logins. Pushing to `main` redeploys it on Vercel.
 
 ## How it works
 
