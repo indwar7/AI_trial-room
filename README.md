@@ -2,7 +2,7 @@
 
 Take a photo of a person and a photo of a garment, say who is wearing it and what it is, and get back a picture of that person wearing the garment.
 
-It is free to run: no AI API key and no billing. The browser sends the two photos straight to public AI demo servers on Hugging Face and shows the picture that comes back. The site itself stores nothing.
+It is free to run: no AI API key and no billing. The browser sends the two photos straight to public AI demo servers on Hugging Face and shows the picture that comes back. The site keeps store logins and nothing else: no photos and no pictures.
 
 ## Logins
 
