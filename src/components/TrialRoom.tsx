@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { GENDERS, typesFor, type Gender } from "@/lib/garments";
 import type { Photo } from "@/lib/image";
+import { inPhoneApp, sharePicture } from "@/lib/native";
 import { runTryOn, type Stage } from "@/lib/tryon";
 import PhotoSlot from "./PhotoSlot";
 import { DownloadIcon, HangerMark, PersonMark } from "./icons";
@@ -12,6 +13,8 @@ type Run =
   | { phase: "working"; stage: Stage }
   | { phase: "done"; url: string }
   | { phase: "error"; message: string };
+
+const PICTURE_NAME = "mirror-fit-try-on.jpg";
 
 function clock(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -24,6 +27,7 @@ export default function TrialRoom() {
   const [typeId, setTypeId] = useState<string | null>(null);
   const [run, setRun] = useState<Run>({ phase: "idle" });
   const [elapsed, setElapsed] = useState(0);
+  const [shareProblem, setShareProblem] = useState<string | null>(null);
 
   /** Stops whichever try-on is in flight. */
   const inFlight = useRef<AbortController | null>(null);
@@ -75,6 +79,7 @@ export default function TrialRoom() {
     const current = () => inFlight.current === controller && !controller.signal.aborted;
 
     setElapsed(0);
+    setShareProblem(null);
     setRun({ phase: "working", stage: { step: "connecting" } });
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     resultRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
@@ -100,6 +105,15 @@ export default function TrialRoom() {
         phase: "error",
         message: err instanceof Error ? err.message : "Something went wrong. Try again.",
       });
+    }
+  }
+
+  async function share(url: string) {
+    setShareProblem(null);
+    try {
+      await sharePicture(url, PICTURE_NAME);
+    } catch {
+      setShareProblem("The picture could not be shared. Take a screenshot instead.");
     }
   }
 
@@ -269,11 +283,22 @@ export default function TrialRoom() {
             </p>
           )}
 
-          {run.phase === "done" && (
-            <a className="btn btn--primary" href={run.url} download="mirror-fit-try-on.jpg">
-              <DownloadIcon />
-              Download the picture
-            </a>
+          {run.phase === "done" &&
+            (inPhoneApp() ? (
+              <button type="button" className="btn btn--primary" onClick={() => share(run.url)}>
+                <DownloadIcon />
+                Save or share the picture
+              </button>
+            ) : (
+              <a className="btn btn--primary" href={run.url} download={PICTURE_NAME}>
+                <DownloadIcon />
+                Download the picture
+              </a>
+            ))}
+          {shareProblem && (
+            <p className="problem" role="alert">
+              {shareProblem}
+            </p>
           )}
         </div>
       </section>

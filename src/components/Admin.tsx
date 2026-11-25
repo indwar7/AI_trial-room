@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "@/lib/session";
+import { Door, MirrorMark } from "./Brand";
 
 interface LoginRequest {
   id: string;
@@ -48,6 +49,15 @@ function messageOf(err: unknown): string {
 
 function day(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** "9876543210" -> "98765 43210", so a number is easy to read out. */
+function spaced(phone: string): string {
+  return phone.length === 10 ? `${phone.slice(0, 5)} ${phone.slice(5)}` : phone;
+}
+
+function count(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
 }
 
 /** "Raymond, Kanpur" -> "raymond-kanpur" */
@@ -199,19 +209,17 @@ export default function Admin() {
 
   if (!key || !overview) {
     return (
-      <main className="door">
+      <Door>
         <form
-          className="door__card"
           onSubmit={(event) => {
             event.preventDefault();
             if (!busy) void open(typedKey.trim());
           }}
         >
-          <p className="eyebrow">Mirror Fit</p>
           <h1 className="door__title">Store logins</h1>
           <p className="door__lead">Enter the admin key to see requests and manage logins.</p>
           <label className="field">
-            <span>Admin key</span>
+            <span className="field__label">Admin key</span>
             <input
               name="admin-key"
               type="password"
@@ -230,240 +238,273 @@ export default function Admin() {
             {busy ? "Opening…" : "Open"}
           </button>
         </form>
-      </main>
+      </Door>
     );
   }
 
+  const active = overview.users.filter((user) => user.active).length;
+
   return (
-    <main className="admin">
-      <div className="admin__head">
-        <h1>Store logins</h1>
-        <button type="button" className="btn btn--quiet" onClick={lock}>
-          Lock
-        </button>
-      </div>
-
-      {problem && (
-        <p className="problem" role="alert">
-          {problem}
-        </p>
-      )}
-
-      {issued && (
-        <section className="panel" aria-live="polite" aria-labelledby="issued-title">
-          <p className="eyebrow">Hand this over</p>
-          <h2 id="issued-title" className="slot__title">
-            Login for {issued.store}
-          </h2>
-          <dl className="creds">
-            <dt>Login ID</dt>
-            <dd>{issued.username}</dd>
-            <dt>Password</dt>
-            <dd>{issued.password}</dd>
-          </dl>
-          <p className="admin__note">
-            The password is shown only now. If it is lost, use Reset password to make a new one.
-          </p>
-          <div className="row__actions">
-            {issued.phone && (
-              <a
-                className="btn btn--primary"
-                href={`https://wa.me/${whatsappNumber(issued.phone)}?text=${encodeURIComponent(handoverMessage(issued))}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Send on WhatsApp
-              </a>
-            )}
-            <button type="button" className="btn" onClick={copyMessage}>
-              {copied ? "Copied" : "Copy message"}
-            </button>
-            <button type="button" className="btn btn--quiet" onClick={() => setIssued(null)}>
-              Done
-            </button>
-          </div>
-        </section>
-      )}
-
-      {draft && (
-        <form className="panel" onSubmit={createLogin} aria-labelledby="draft-title">
-          <h2 id="draft-title" className="slot__title">
-            New login
-          </h2>
-          <div className="panel__grid">
-            <label className="field">
-              <span>Store name</span>
-              <input
-                name="store"
-                value={draft.store}
-                onChange={(e) => setDraft({ ...draft, store: e.target.value })}
-                maxLength={80}
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Login ID</span>
-              <input
-                name="username"
-                value={draft.username}
-                onChange={(e) => setDraft({ ...draft, username: e.target.value.toLowerCase() })}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                maxLength={30}
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Phone (optional)</span>
-              <input
-                name="phone"
-                type="tel"
-                inputMode="tel"
-                value={draft.phone}
-                onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-                maxLength={20}
-              />
-            </label>
-          </div>
-          <p className="admin__note">A password is made for you and shown on the next step.</p>
-          <div className="row__actions">
-            <button type="submit" className="btn btn--primary" disabled={busy}>
-              {busy ? "Creating…" : "Create login"}
-            </button>
-            <button type="button" className="btn btn--quiet" onClick={() => setDraft(null)}>
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-
-      <section className="admin__section" aria-labelledby="requests-title">
-        <div className="admin__head">
-          <h2 id="requests-title" className="slot__title">
-            Login requests ({overview.requests.length})
-          </h2>
-        </div>
-        {overview.requests.length === 0 ? (
-          <p className="admin__empty">No one is waiting for a login.</p>
-        ) : (
-          <ul className="rows">
-            {overview.requests.map((request) => (
-              <li key={request.id} className="row">
-                <div className="row__main">
-                  <p className="row__title">{request.store}</p>
-                  <p className="row__meta">
-                    {request.name} · {request.phone} · {day(request.createdAt)}
-                  </p>
-                </div>
-                <div className="row__actions">
-                  <button
-                    type="button"
-                    className="btn btn--primary"
-                    disabled={busy}
-                    onClick={() =>
-                      setDraft({
-                        username: suggestLoginId(request.store),
-                        store: request.store,
-                        phone: request.phone,
-                        requestId: request.id,
-                      })
-                    }
-                  >
-                    Create login
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={busy}
-                    onClick={() => dismissRequest(request.id)}
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="admin__section" aria-labelledby="logins-title">
-        <div className="admin__head">
-          <h2 id="logins-title" className="slot__title">
-            Stores with a login ({overview.users.length})
-          </h2>
-          <button
-            type="button"
-            className="btn"
-            disabled={busy}
-            onClick={() => setDraft({ username: "", store: "", phone: "" })}
-          >
-            Add a login
+    <>
+      <header className="top">
+        <span className="top__mark">
+          <MirrorMark />
+          Mirror Fit
+        </span>
+        <div className="top__who">
+          <span className="top__store">Admin</span>
+          <button type="button" className="btn btn--quiet" onClick={lock}>
+            Lock
           </button>
         </div>
-        {overview.users.length === 0 ? (
-          <p className="admin__empty">No store has a login yet.</p>
-        ) : (
-          <ul className="rows">
-            {overview.users.map((user) => (
-              <li key={user.username} className={user.active ? "row" : "row row--off"}>
-                <div className="row__main">
-                  <p className="row__title">
-                    {user.store}
-                    {!user.active && <span className="tag">Off</span>}
-                  </p>
-                  <p className="row__meta">
-                    {user.username}
-                    {user.phone && ` · ${user.phone}`} · since {day(user.createdAt)}
-                  </p>
-                </div>
-                <div className="row__actions">
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={busy}
-                    onClick={() => resetPassword(user.username)}
-                  >
-                    Reset password
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={busy}
-                    onClick={() => setActive(user.username, !user.active)}
-                  >
-                    {user.active ? "Turn off" : "Turn on"}
-                  </button>
-                  {deleting === user.username ? (
-                    <>
-                      <button
-                        type="button"
-                        className="btn btn--danger"
-                        disabled={busy}
-                        onClick={() => deleteLogin(user.username)}
-                      >
-                        Yes, delete
-                      </button>
-                      <button type="button" className="btn btn--quiet" onClick={() => setDeleting(null)}>
-                        Keep
-                      </button>
-                    </>
-                  ) : (
+      </header>
+
+      <main className="admin">
+        <h1>Store logins</h1>
+        <p className="admin__summary">
+          {overview.requests.length === 0
+            ? "No one is waiting for a login."
+            : `${count(overview.requests.length, "store is", "stores are")} waiting for a login.`}{" "}
+          {count(active, "store", "stores")} can sign in.
+        </p>
+
+        {problem && (
+          <p className="problem" role="alert">
+            {problem}
+          </p>
+        )}
+
+        {issued && (
+          <section className="ticket" aria-live="polite" aria-labelledby="issued-title">
+            <h2 id="issued-title" className="ticket__title">
+              Login for {issued.store}
+            </h2>
+            <dl className="creds">
+              <dt>Login ID</dt>
+              <dd>{issued.username}</dd>
+              <dt>Password</dt>
+              <dd>{issued.password}</dd>
+            </dl>
+            <p className="admin__note">
+              Send it now. The password is not shown again; Reset password makes a new one.
+            </p>
+            <div className="row__actions">
+              {issued.phone && (
+                <a
+                  className="btn btn--primary"
+                  href={`https://wa.me/${whatsappNumber(issued.phone)}?text=${encodeURIComponent(handoverMessage(issued))}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Send on WhatsApp
+                </a>
+              )}
+              <button type="button" className="btn" onClick={copyMessage}>
+                {copied ? "Copied" : "Copy message"}
+              </button>
+              <button type="button" className="btn btn--quiet" onClick={() => setIssued(null)}>
+                Done
+              </button>
+            </div>
+          </section>
+        )}
+
+        {draft && (
+          <form className="panel" onSubmit={createLogin} aria-labelledby="draft-title">
+            <h2 id="draft-title" className="slot__title">
+              New login
+            </h2>
+            <div className="panel__grid">
+              <label className="field">
+                <span className="field__label">Store name</span>
+                <input
+                  name="store"
+                  value={draft.store}
+                  onChange={(e) => setDraft({ ...draft, store: e.target.value })}
+                  maxLength={80}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span className="field__label">Login ID</span>
+                <input
+                  name="username"
+                  value={draft.username}
+                  onChange={(e) => setDraft({ ...draft, username: e.target.value.toLowerCase() })}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  maxLength={30}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span className="field__label">Phone (optional)</span>
+                <input
+                  name="phone"
+                  type="tel"
+                  inputMode="tel"
+                  value={draft.phone}
+                  onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+                  maxLength={20}
+                />
+              </label>
+            </div>
+            <p className="admin__note">
+              The login ID is what the store types to sign in. A password is made for you on the
+              next step.
+            </p>
+            <div className="row__actions">
+              <button type="submit" className="btn btn--primary" disabled={busy}>
+                {busy ? "Creating…" : "Create login"}
+              </button>
+              <button type="button" className="btn btn--quiet" onClick={() => setDraft(null)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        <section className="admin__section" aria-labelledby="requests-title">
+          <div className="admin__head">
+            <h2 id="requests-title" className="slot__title">
+              Login requests ({overview.requests.length})
+            </h2>
+          </div>
+          {overview.requests.length === 0 ? (
+            <p className="admin__empty">
+              Requests from the sign-in screen appear here. Nothing is waiting right now.
+            </p>
+          ) : (
+            <ul className="rows">
+              {overview.requests.map((request) => (
+                <li key={request.id} className="row">
+                  <div className="row__main">
+                    <p className="row__title">{request.store}</p>
+                    <p className="row__meta">
+                      <span>{request.name}</span>
+                      <a href={`tel:${request.phone}`}>{spaced(request.phone)}</a>
+                      <span>Asked on {day(request.createdAt)}</span>
+                    </p>
+                  </div>
+                  <div className="row__actions">
                     <button
                       type="button"
-                      className="btn btn--quiet"
+                      className="btn btn--primary"
                       disabled={busy}
-                      onClick={() => setDeleting(user.username)}
+                      onClick={() =>
+                        setDraft({
+                          username: suggestLoginId(request.store),
+                          store: request.store,
+                          phone: request.phone,
+                          requestId: request.id,
+                        })
+                      }
                     >
-                      Delete
+                      Create login
                     </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </main>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={busy}
+                      onClick={() => dismissRequest(request.id)}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="admin__section" aria-labelledby="logins-title">
+          <div className="admin__head">
+            <h2 id="logins-title" className="slot__title">
+              Stores with a login ({overview.users.length})
+            </h2>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={() => setDraft({ username: "", store: "", phone: "" })}
+            >
+              Add a login
+            </button>
+          </div>
+          {overview.users.length === 0 ? (
+            <p className="admin__empty">
+              No store has a login yet. Create one from a request, or use Add a login.
+            </p>
+          ) : (
+            <ul className="rows">
+              {overview.users.map((user) => (
+                <li key={user.username} className={user.active ? "row" : "row row--off"}>
+                  <div className="row__main">
+                    <p className="row__title">
+                      {user.store}
+                      <span className={user.active ? "tag tag--on" : "tag"}>
+                        {user.active ? "Active" : "Off"}
+                      </span>
+                    </p>
+                    <p className="row__meta">
+                      <span>Login ID {user.username}</span>
+                      {user.phone && <a href={`tel:${user.phone}`}>{spaced(user.phone)}</a>}
+                      <span>Since {day(user.createdAt)}</span>
+                    </p>
+                  </div>
+                  <div className="row__actions">
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={busy}
+                      onClick={() => resetPassword(user.username)}
+                    >
+                      Reset password
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={busy}
+                      onClick={() => setActive(user.username, !user.active)}
+                    >
+                      {user.active ? "Turn off" : "Turn on"}
+                    </button>
+                    {deleting === user.username ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn--danger"
+                          disabled={busy}
+                          onClick={() => deleteLogin(user.username)}
+                        >
+                          Yes, delete
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--quiet"
+                          onClick={() => setDeleting(null)}
+                        >
+                          Keep
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn--quiet"
+                        disabled={busy}
+                        onClick={() => setDeleting(user.username)}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </main>
+    </>
   );
 }

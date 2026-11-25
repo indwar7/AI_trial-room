@@ -7,13 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminPage() {
-  return (
-    <>
-      <header className="top">
-        <span className="top__mark">Mirror Fit</span>
-        <span className="eyebrow">Admin</span>
-      </header>
-      <Admin />
-    </>
-  );
+  return <Admin />;
 }
