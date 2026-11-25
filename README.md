@@ -1,4 +1,4 @@
-# AI Trial Room
+# Mirror Fit · AI Trial Room
 
 Take a photo of a person and a photo of a garment, say who is wearing it and what it is, and get back a picture of that person wearing the garment.
 

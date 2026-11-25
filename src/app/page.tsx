@@ -4,8 +4,8 @@ export default function Home() {
   return (
     <>
       <header className="top">
-        <span className="top__mark">AI Trial Room</span>
-        <span className="eyebrow">Virtual fitting</span>
+        <span className="top__mark">Mirror Fit</span>
+        <span className="eyebrow">AI Trial Room</span>
       </header>
 
       <div className="intro">

@@ -15,10 +15,17 @@ const sans = Jost({
   display: "swap",
 });
 
+const title = "Mirror Fit · AI Trial Room";
+const description =
+  "Take a photo of a person and a photo of a garment, and see the garment fitted on them.";
+
 export const metadata: Metadata = {
-  title: "AI Trial Room",
-  description:
-    "Take a photo of a person and a photo of a garment, and see the garment fitted on them.",
+  title,
+  description,
+  applicationName: "Mirror Fit",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { title: "Mirror Fit" },
+  openGraph: { title, description, siteName: "Mirror Fit", type: "website" },
 };
 
 export const viewport: Viewport = {

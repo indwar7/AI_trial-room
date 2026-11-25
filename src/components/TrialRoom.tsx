@@ -270,7 +270,7 @@ export default function TrialRoom() {
           )}
 
           {run.phase === "done" && (
-            <a className="btn btn--primary" href={run.url} download="trial-room.jpg">
+            <a className="btn btn--primary" href={run.url} download="mirror-fit-try-on.jpg">
               <DownloadIcon />
               Download the picture
             </a>

@@ -33,6 +33,9 @@ export class TryOnError extends Error {
 /** The server said no for a reason another server will not fix. */
 class QuotaError extends Error {}
 
+/** The server took longer than it is given. */
+class SlowError extends Error {}
+
 interface Files {
   person: Blob;
   garment: Blob;
@@ -54,6 +57,8 @@ interface Server {
 }
 
 const STEPS = 30;
+/** How long a server gets to answer the first hello, and then to finish. */
+const CONNECT_TIMEOUT_MS = 30 * 1000;
 const SERVER_TIMEOUT_MS = 4 * 60 * 1000;
 
 /** IDM-VTON. Tops only, and the lightest on the free allowance. */
@@ -136,50 +141,82 @@ interface SpaceEvent {
   data?: unknown;
 }
 
+/** Settles with `work`, unless it takes longer than `ms` or the shopper cancels first. */
+function within<T>(work: Promise<T>, ms: number, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const settle = (finish: () => void) => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      finish();
+    };
+    const onAbort = () => settle(() => reject(new DOMException("Cancelled", "AbortError")));
+    const timer = setTimeout(
+      () => settle(() => reject(new SlowError("The server took too long."))),
+      ms,
+    );
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    work.then(
+      (value) => settle(() => resolve(value)),
+      (err) => settle(() => reject(err)),
+    );
+  });
+}
+
+/** Follows a job to its picture, reporting progress on the way. */
+async function pictureFrom(job: AsyncIterable<unknown>, request: TryOnRequest): Promise<Blob> {
+  const { signal, onStage } = request;
+  for await (const raw of job) {
+    const event = raw as SpaceEvent;
+    if (event.type === "status") {
+      if (event.stage === "error") {
+        const text = `${event.title ?? ""} ${event.message ?? ""}`.trim();
+        const quota = quotaMessage(text, request.type.category);
+        if (quota) throw new QuotaError(quota);
+        throw new Error(text || "The server reported an error.");
+      }
+      if (event.stage === "pending" && (event.position ?? 0) > 0) {
+        onStage({ step: "queued", ahead: event.position ?? 0 });
+      } else if (event.stage === "pending" || event.stage === "generating") {
+        onStage({ step: "fitting" });
+      }
+    } else if (event.type === "data") {
+      const first = Array.isArray(event.data) ? (event.data[0] as { url?: string } | null) : null;
+      if (!first?.url) throw new Error("The server returned no picture.");
+      const picture = await fetch(first.url, { signal });
+      if (!picture.ok) throw new Error(`The picture could not be fetched (${picture.status}).`);
+      return await picture.blob();
+    }
+  }
+  if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+  throw new Error("The server stopped before making a picture.");
+}
+
 async function runOn(server: Server, files: Files, request: TryOnRequest): Promise<Blob> {
   const { Client, handle_file } = await import("@gradio/client");
   const { signal, onStage } = request;
 
   onStage({ step: "connecting" });
-  const client = await Client.connect(server.space, { events: ["data", "status"] });
-  if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+  const connecting = Client.connect(server.space, { events: ["data", "status"] });
+  const client = await within(connecting, CONNECT_TIMEOUT_MS, signal).catch((err) => {
+    // If the server answers after we stopped waiting, hang up.
+    void connecting.then((late) => late.close(), () => undefined);
+    throw err;
+  });
 
   const job = client.submit(
     server.endpoint,
     server.payload(files, request, (blob) => handle_file(blob)),
   );
-  const stop = () => void job.cancel().catch(() => undefined);
-  signal.addEventListener("abort", stop, { once: true });
-  const timer = setTimeout(stop, SERVER_TIMEOUT_MS);
-
   try {
-    for await (const raw of job) {
-      const event = raw as SpaceEvent;
-      if (event.type === "status") {
-        if (event.stage === "error") {
-          const text = `${event.title ?? ""} ${event.message ?? ""}`.trim();
-          const quota = quotaMessage(text, request.type.category);
-          if (quota) throw new QuotaError(quota);
-          throw new Error(text || "The server reported an error.");
-        }
-        if (event.stage === "pending" && (event.position ?? 0) > 0) {
-          onStage({ step: "queued", ahead: event.position ?? 0 });
-        } else if (event.stage === "pending" || event.stage === "generating") {
-          onStage({ step: "fitting" });
-        }
-      } else if (event.type === "data") {
-        const first = Array.isArray(event.data) ? (event.data[0] as { url?: string } | null) : null;
-        if (!first?.url) throw new Error("The server returned no picture.");
-        const picture = await fetch(first.url, { signal });
-        if (!picture.ok) throw new Error(`The picture could not be fetched (${picture.status}).`);
-        return await picture.blob();
-      }
-    }
-    if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
-    throw new Error("The server stopped before making a picture.");
+    return await within(pictureFrom(job, request), SERVER_TIMEOUT_MS, signal);
+  } catch (err) {
+    if (signal.aborted || err instanceof SlowError) void job.cancel().catch(() => undefined);
+    throw err;
   } finally {
-    clearTimeout(timer);
-    signal.removeEventListener("abort", stop);
     client.close();
   }
 }
@@ -191,6 +228,7 @@ export async function runTryOn(request: TryOnRequest): Promise<Blob> {
     garment: await photoToBlob(request.garment),
   };
   const servers = SERVERS.filter((s) => s.categories.includes(request.type.category));
+  let anotherFailed = false;
 
   for (const server of servers) {
     try {
@@ -201,11 +239,20 @@ export async function runTryOn(request: TryOnRequest): Promise<Blob> {
       if (request.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
         throw new DOMException("Cancelled", "AbortError");
       }
-      if (err instanceof QuotaError) throw new TryOnError(err.message);
+      if (err instanceof QuotaError) {
+        // The stand-in server needs far more allowance than the first one,
+        // so its refusal does not mean the day's try-ons are used up.
+        if (anotherFailed) break;
+        throw new TryOnError(err.message);
+      }
+      anotherFailed = true;
       console.warn(`[tryon] ${server.space} failed:`, err);
     }
   }
 
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new TryOnError("You are offline. Connect to the internet and try again.");
+  }
   throw new TryOnError(
     "The free AI servers could not make this picture. Use a clear, front-facing photo of one person and a clear photo of the garment, or try again in a few minutes.",
   );
