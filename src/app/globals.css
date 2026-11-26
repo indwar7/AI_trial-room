@@ -66,76 +66,11 @@ body {
   font-size: 23px; font-weight: 600; letter-spacing: 0.01em;
 }
 
-.intro {
-  max-width: 1180px; margin: 0 auto;
-  padding: clamp(28px, 5vw, 56px) clamp(16px, 4vw, 40px) clamp(20px, 3vw, 32px);
-}
-.intro h1 {
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: clamp(34px, 5.4vw, 60px);
-  line-height: 1.04;
-  letter-spacing: -0.01em;
-  text-wrap: balance;
-}
-.intro p {
-  margin-top: 14px; max-width: 46ch;
-  color: var(--ink-2); font-size: 16px;
-}
-
-/* ── Layout ───────────────────────────────────────────────────────── */
-.room {
-  max-width: 1180px; margin: 0 auto;
-  padding: 0 clamp(16px, 4vw, 40px) 56px;
-  display: grid; gap: 40px;
-  grid-template-columns: minmax(0, 1fr);
-}
-.room__inputs { display: grid; gap: 32px; min-width: 0; align-content: start; }
-.slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(12px, 2.4vw, 24px); }
-
-@media (min-width: 940px) {
-  .room { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 56px; align-items: start; }
-  .result { position: sticky; top: 24px; }
-}
-
-.slot, .details, .result { min-width: 0; }
+/* ── Section headings ─────────────────────────────────────────────── */
 .slot__title {
   font-family: var(--serif);
   font-size: clamp(22px, 2.6vw, 28px); font-weight: 500; line-height: 1.15;
   margin: 4px 0 12px;
-}
-
-/* ── Photo frame ──────────────────────────────────────────────────── */
-.frame {
-  position: relative; overflow: hidden;
-  aspect-ratio: 3 / 4;
-  background: var(--ivory-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-.frame--filled { background: var(--white); border-color: var(--line-2); }
-.frame--result { max-height: 78dvh; margin: 0 auto; }
-.frame__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.frame--result .frame__img { object-fit: contain; }
-.frame__img--waiting { opacity: 0.45; filter: grayscale(0.4); }
-.frame__empty {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-  padding: 18px; text-align: center;
-  color: var(--muted); font-size: 13.5px; line-height: 1.45;
-}
-.frame__empty svg { color: var(--gold); }
-.frame__empty p { max-width: 24ch; }
-
-.frame__sweep {
-  position: absolute; left: 0; right: 0; top: 0; height: 34%;
-  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.7) 82%, var(--gold) 100%);
-  border-bottom: 1px solid var(--gold);
-  animation: sweep 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
-}
-@keyframes sweep {
-  from { transform: translateY(-100%); }
-  to   { transform: translateY(294%); }
 }
 
 /* ── Buttons ──────────────────────────────────────────────────────── */
@@ -166,19 +101,6 @@ body {
 }
 .icon-btn:hover { border-color: currentColor; }
 
-/* The two buttons sit side by side only where the slot is wide enough to
-   keep each label on one line. */
-.slot { container-type: inline-size; }
-.slot__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
-@container (max-width: 330px) {
-  .slot__actions { grid-template-columns: minmax(0, 1fr); }
-}
-
-.slot__hint { display: none; }
-.slot__caption { margin-top: 8px; font-size: 13.5px; color: var(--ink-2); }
-.slot__extra { margin-top: 10px; }
-.slot__extra .btn { width: 100%; }
-.slot__extra + .slot__actions { margin-top: 8px; }
 .btn--ink { background: var(--ink); border-color: var(--ink); color: var(--ivory); }
 .btn--ink:hover:not(:disabled) { background: var(--ink-2); border-color: var(--ink-2); }
 
@@ -189,33 +111,276 @@ body {
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
 }
 
-/* ── Choices ──────────────────────────────────────────────────────── */
-.choice { border: 0; min-width: 0; }
-.choice + .choice { margin-top: 20px; }
-.choice legend { font-size: 13.5px; color: var(--ink-2); margin-bottom: 8px; padding: 0; }
-.choice__row { display: flex; flex-wrap: wrap; gap: 8px; }
-.choice__group + .choice__group { margin-top: 14px; }
-.choice__label { margin-bottom: 6px; font-size: 12.5px; color: var(--muted); }
-.details__note { margin: -4px 0 16px; font-size: 13.5px; color: var(--muted); }
-
-.pill { position: relative; cursor: pointer; }
-.pill input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
-.pill span {
-  display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px;
-  font-size: 14px;
-  background: var(--white); border: 1px solid var(--line-2); border-radius: var(--r);
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+/* ── The trial room ───────────────────────────────────────────────────
+   Three panes side by side on a wide screen, so nothing needs scrolling.
+   On a phone the same three panes are steps, one on screen at a time,
+   with the main button always at the bottom. */
+.studio {
+  --stage-max: min(54dvh, 540px);
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto;
+  min-height: calc(100dvh - 60px);
+  padding: 0 16px;
 }
-.pill:hover span { border-color: var(--ink); }
-.pill input:checked + span { background: var(--ink); border-color: var(--ink); color: var(--ivory); }
-.choice:disabled .pill { cursor: not-allowed; opacity: 0.55; }
-.choice:disabled .pill input { cursor: not-allowed; }
+.pane { min-width: 0; display: none; flex-direction: column; padding: 18px 0 22px; }
+.studio[data-step="garment"] > .pane--garment,
+.studio[data-step="person"] > .pane--person,
+.studio[data-step="result"] > .pane--result { display: flex; }
 
-.go__missing { margin-top: 10px; color: var(--muted); font-size: 13.5px; }
+.pane__head { display: none; align-items: center; gap: 10px; margin-bottom: 14px; }
+.pane__head h2 { font-family: var(--serif); font-size: 25px; font-weight: 500; line-height: 1.1; }
+.pane__num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 1px solid var(--line-2);
+  font-size: 12.5px; font-weight: 500; color: var(--ink-2);
+}
+.pane__note { margin-top: 10px; font-size: 13.5px; color: var(--ink-2); }
+
+/* Steps (phone) */
+.steps {
+  position: sticky; top: 0; z-index: 6;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  margin: 0 -16px;
+  background: var(--white); border-bottom: 1px solid var(--line);
+}
+.steps__item {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 50px; padding: 0 6px;
+  border: 0; border-bottom: 2px solid transparent; background: transparent; cursor: pointer;
+  font-family: var(--sans); font-size: 14.5px; color: var(--muted);
+}
+.steps__item[aria-current="step"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 500; }
+.steps__item:disabled { cursor: not-allowed; }
+.steps__item:focus-visible { outline-offset: -3px; }
+.steps__num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid currentColor; font-size: 12px;
+}
+.steps__num svg { width: 12px; height: 12px; stroke-width: 2.4; }
+.steps__num:has(svg) { background: var(--ink); border-color: var(--ink); color: var(--ivory); }
+
+/* A picture area: 3:4 where there is room, shorter where there is not.
+   The picture is always shown whole. */
+.stage {
+  position: relative; overflow: hidden;
+  width: 100%; aspect-ratio: 3 / 4; max-height: var(--stage-max); min-height: 200px;
+  background: var(--ivory-2);
+  border: 1px solid var(--line); border-radius: var(--r);
+}
+.stage--filled { background: var(--white); border-color: var(--line-2); }
+.stage__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+.stage__img--waiting { opacity: 0.45; filter: grayscale(0.4); }
+.stage__empty {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding: 18px; text-align: center;
+  color: var(--muted); font-size: 14px; line-height: 1.45;
+}
+.stage__empty svg { color: var(--gold); }
+.stage__empty p { max-width: 26ch; }
+.stage__sweep {
+  position: absolute; left: 0; right: 0; top: 0; height: 34%;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.7) 82%, var(--gold) 100%);
+  border-bottom: 1px solid var(--gold);
+  animation: sweep 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+@keyframes sweep {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(294%); }
+}
+
+/* Camera and upload */
+.photo-buttons { margin-top: 12px; }
+.photo-buttons__row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.photo-buttons__row .btn { min-height: 48px; padding: 0 10px; }
+.photo-buttons--compact { margin-top: 0; }
+.photo-buttons--compact .photo-buttons__row { gap: 0; border-top: 1px solid var(--line); }
+.photo-buttons--compact .btn {
+  min-height: 44px; padding: 0;
+  border: 0; border-radius: 0; background: transparent; color: var(--ink-2);
+}
+.photo-buttons--compact .btn + .btn { border-left: 1px solid var(--line); }
+.photo-buttons--compact .btn:hover:not(:disabled) { background: var(--ivory-2); color: var(--ink); }
+.photo-buttons--compact .btn:focus-visible { outline-offset: -3px; }
+.photo-buttons--compact .problem { margin: 0; padding: 8px 10px 10px; border-top: 1px solid var(--line); }
+
+/* Catalogue: who it is for, then the kind of garment */
+.filters {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 20px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.seg {
+  display: inline-grid; grid-auto-flow: column;
+  margin: 0 0 12px; padding: 0; min-width: 0;
+  border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden;
+}
+.seg__item { position: relative; cursor: pointer; }
+.seg__item input, .tabs__item input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.seg__item span {
+  display: inline-flex; align-items: center; min-height: 40px; padding: 0 20px;
+  font-size: 14.5px; background: var(--white);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.seg__item + .seg__item span { border-left: 1px solid var(--line-2); }
+.seg__item input:checked + span { background: var(--ink); color: var(--ivory); }
+.seg__item input:focus-visible + span,
+.tabs__item input:focus-visible + span { outline: 1.5px solid var(--berry); outline-offset: -3px; }
+.tabs {
+  display: flex; gap: 2px;
+  margin: 0; padding: 0; border: 0; min-width: 0; max-width: 100%;
+  overflow-x: auto; scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tabs__item { position: relative; flex: none; cursor: pointer; }
+.tabs__item span {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 9px;
+  font-size: 15px; color: var(--muted);
+  transition: color 0.15s ease, box-shadow 0.15s ease;
+}
+.tabs__item:hover span { color: var(--ink); }
+.tabs__item input:checked + span { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); font-weight: 500; }
+
+/* Catalogue: the garments */
+.shelf { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 1px; }
+.shelf > li { display: flex; min-width: 0; }
+.garment {
+  display: flex; flex-direction: column; width: 100%; padding: 0; text-align: left;
+  font-family: var(--sans); color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--line); border-radius: var(--r); overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+button.garment { cursor: pointer; }
+button.garment:hover:not(:disabled) { border-color: var(--ink); }
+button.garment:disabled { cursor: default; }
+.garment--chosen { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.garment__photo {
+  position: relative; display: block; overflow: hidden;
+  aspect-ratio: 3 / 4;
+  background: var(--ivory-2);
+}
+/* The photos are on white; multiplying sits them on the tile's own colour. */
+.garment__photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+.garment__wait {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(251, 249, 246, 0.82); font-size: 14px; color: var(--ink-2);
+}
+.garment__tick {
+  position: absolute; top: 8px; right: 8px;
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--ink); color: var(--ivory);
+}
+.garment__tick svg { width: 14px; height: 14px; stroke-width: 2.2; }
+.garment__name {
+  display: flex; align-items: center; flex: 1 0 auto;
+  min-height: 44px; padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 14px; line-height: 1.25;
+}
+.garment--own { border-style: dashed; border-color: var(--line-2); }
+.garment--own.garment--chosen { border-style: solid; border-color: var(--ink); }
+.garment__own-empty {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 10px; text-align: center;
+  font-size: 14px; line-height: 1.3; color: var(--ink-2);
+}
+.garment__own-empty svg { width: 44px; height: 44px; margin-bottom: 4px; color: var(--gold); }
+.garment__own-empty small { font-size: 12.5px; color: var(--muted); }
+
+.own-details {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  margin-top: 14px; padding: 10px 14px;
+  background: var(--ivory-2); border: 1px solid var(--line); border-radius: var(--r);
+  font-size: 14.5px;
+}
+.own-details select {
+  min-height: 40px; padding: 0 10px;
+  font-family: var(--sans); font-size: 15px; color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--line-2); border-radius: var(--r);
+}
+
+/* The main button: at the bottom of the screen on a phone */
+.bar {
+  position: sticky; bottom: 0; z-index: 5;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px;
+  margin: 0 -16px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: var(--white); border-top: 1px solid var(--line);
+}
+.bar__picks { display: flex; align-items: center; gap: 6px; }
+.bar__thumb {
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  width: 38px; height: 50px;
+  background: var(--ivory-2); color: var(--gold);
+  border: 1px solid var(--line-2); border-radius: var(--r);
+}
+.bar__thumb svg { width: 24px; height: 24px; }
+.bar__thumb img { width: 100%; height: 100%; object-fit: cover; }
+.bar__thumb--filled { background: var(--white); border-color: var(--ink); }
+.bar__name, .bar__hint { display: none; }
+.bar .btn--large { min-height: 50px; }
+
+/* Phones: three across, so a whole shelf is on the screen at once. */
+@media (min-width: 360px) and (max-width: 619px) {
+  .shelf { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .garment__name { padding: 6px 8px; font-size: 13px; }
+  .garment__tick { top: 6px; right: 6px; width: 22px; height: 22px; }
+  .garment__own-empty { font-size: 13px; }
+  .garment__own-empty svg { width: 34px; height: 34px; }
+}
+
+@media (min-width: 620px) and (max-width: 1023px) {
+  .studio { max-width: 760px; margin: 0 auto; }
+  .shelf { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pane--person, .pane--result { width: min(100%, 440px); margin: 0 auto; }
+}
+
+@media (min-width: 1024px) {
+  .steps { display: none; }
+  .studio {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr) minmax(0, 1.1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: start; gap: 14px 18px;
+    max-width: 1480px; margin: 0 auto;
+    height: calc(100dvh - 60px); min-height: 540px;
+    padding: 18px clamp(18px, 2.4vw, 32px);
+  }
+  .pane {
+    display: flex; padding: 18px;
+    background: var(--white);
+    border: 1px solid var(--line); border-radius: var(--r);
+  }
+  .pane__head { display: flex; }
+  .pane--garment { grid-column: 1; grid-row: 1 / 3; align-self: stretch; min-height: 0; }
+  /* The button sits under the customer's photo, where the eye is when the
+     photo goes in; the result then has its whole column. */
+  .pane--person { grid-column: 2; grid-row: 1; }
+  .pane--person .stage { max-height: calc(100dvh - 376px); }
+  .pane--result { grid-column: 3; grid-row: 1 / 3; }
+  .pane--result .stage { max-height: calc(100dvh - 306px); }
+  .shelf {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; align-content: start;
+  }
+  /* A touch shorter than 3:4, so two rows fit a laptop screen. */
+  .garment__photo { aspect-ratio: 4 / 5; }
+  .bar {
+    position: static; display: block;
+    grid-column: 2; grid-row: 2;
+    margin: 0; padding: 0; background: transparent; border: 0;
+  }
+  .bar__picks { display: none; }
+  .bar__hint { display: block; margin-top: 8px; text-align: center; font-size: 13.5px; color: var(--muted); }
+}
 
 /* ── Result ───────────────────────────────────────────────────────── */
 .result__status { margin-top: 14px; display: grid; gap: 10px; justify-items: start; }
-.result__status .btn--primary { width: 100%; min-height: 50px; }
 .result__status .problem { margin-top: 0; }
 .result__line {
   width: 100%; display: flex; justify-content: space-between; gap: 16px;
@@ -239,8 +404,8 @@ body {
 .compare__side + .compare__side { border-left: 1px solid var(--line-2); }
 .compare__side[aria-pressed="true"] { background: var(--ink); color: var(--ivory); }
 .compare__side:focus-visible { outline-offset: -3px; }
-.result__actions { width: 100%; display: grid; gap: 8px; }
-.result__actions .btn { width: 100%; min-height: 50px; }
+.result__actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.result__actions .btn { width: 100%; min-height: 48px; padding: 0 10px; }
 
 .meter { width: 100%; height: 2px; background: var(--line); overflow: hidden; }
 .meter span { display: block; height: 100%; background: var(--ink); transition: width 0.6s ease; }
@@ -248,46 +413,6 @@ body {
 @keyframes waiting {
   from { transform: translateX(-100%); }
   to   { transform: translateX(334%); }
-}
-
-/* ── Phones: each photo step is a card with the frame beside its controls,
-      and the try-on button stays in reach at the bottom of the screen ── */
-@media (max-width: 619px) {
-  .slots { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .slot {
-    display: grid; grid-template-columns: 108px minmax(0, 1fr); grid-template-rows: auto 1fr;
-    grid-template-areas: "frame head" "frame body";
-    column-gap: 14px; align-items: start;
-    padding: 12px;
-    background: var(--white); border: 1px solid var(--line); border-radius: var(--r);
-  }
-  .slot__head { grid-area: head; }
-  .slot > .frame { grid-area: frame; }
-  .slot__body { grid-area: body; min-width: 0; }
-  .slot__title { margin: 2px 0 6px; font-size: 23px; }
-  .slot .frame__empty { padding: 8px; }
-  .slot .frame__empty p { display: none; }
-  .slot__hint { display: block; margin-bottom: 10px; font-size: 13.5px; line-height: 1.4; color: var(--muted); }
-  .slot__caption { margin: 0 0 10px; }
-  .slot__extra { margin-top: 0; }
-  .slot__actions { margin-top: 0; }
-  .slot__actions .btn { padding: 0 6px; font-size: 11px; letter-spacing: 0.08em; }
-  .slot__actions .btn svg { display: none; }
-  .slot .problem { margin-top: 8px; }
-  @container (max-width: 319px) {
-    .slot__actions { grid-template-columns: minmax(0, 1fr); }
-    .slot__actions .btn svg { display: inline; }
-  }
-}
-@media (max-width: 939px) {
-  .go {
-    position: sticky; bottom: 0; z-index: 5;
-    margin: 0 calc(-1 * clamp(16px, 4vw, 40px));
-    padding: 12px clamp(16px, 4vw, 40px) calc(12px + env(safe-area-inset-bottom));
-    background: var(--ivory);
-    border-top: 1px solid var(--line);
-  }
-  .go__missing { margin-top: 8px; }
 }
 
 /* ── Camera ───────────────────────────────────────────────────────── */
@@ -347,69 +472,6 @@ body {
   font-size: clamp(30px, 6vw, 44px); line-height: 1.08;
 }
 .lost p { margin: 12px 0 26px; color: var(--ink-2); }
-
-/* ── Catalogue ────────────────────────────────────────────────────── */
-.catalogue {
-  width: 100%; height: 100%; max-width: none; max-height: none;
-  margin: 0; padding: 0; border: 0;
-  background: transparent; color: var(--ink);
-}
-.catalogue[open] { display: flex; align-items: center; justify-content: center; }
-.catalogue::backdrop { background: rgba(20, 17, 15, 0.6); }
-.catalogue__sheet {
-  width: 100%; height: 100%;
-  display: flex; flex-direction: column;
-  overflow-y: auto; overscroll-behavior: contain;
-  background: var(--ivory);
-  padding: 6px 16px max(24px, env(safe-area-inset-bottom));
-}
-.catalogue__bar {
-  position: sticky; top: -6px; z-index: 1;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  min-height: 56px; margin: 0 -16px; padding: 0 8px 0 16px;
-  background: var(--ivory); border-bottom: 1px solid var(--line);
-}
-.catalogue__title { font-family: var(--serif); font-size: 26px; font-weight: 500; }
-.catalogue__filters { display: grid; gap: 10px; padding: 16px 0 4px; }
-.catalogue__filters .choice + .choice { margin-top: 0; }
-.catalogue__grid {
-  list-style: none;
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
-  padding-top: 14px;
-}
-.garment {
-  display: block; width: 100%; padding: 0; text-align: left;
-  font-family: var(--sans); color: var(--ink);
-  background: var(--white);
-  border: 1px solid var(--line); border-radius: var(--r);
-  cursor: pointer;
-  transition: border-color 0.15s ease;
-}
-.garment:hover:not(:disabled) { border-color: var(--ink); }
-.garment:disabled { cursor: progress; }
-.garment--chosen { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
-.garment__photo { position: relative; display: block; aspect-ratio: 3 / 4; overflow: hidden; background: var(--white); }
-.garment__photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-.garment__wait {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(251, 249, 246, 0.82); font-size: 14px; color: var(--ink-2);
-}
-.garment__name {
-  display: block; padding: 10px 12px 12px;
-  border-top: 1px solid var(--line);
-  font-size: 14px; line-height: 1.3;
-}
-.garment--chosen .garment__name::after { content: " (chosen)"; color: var(--muted); }
-
-@media (min-width: 620px) {
-  .catalogue__sheet { width: min(94vw, 980px); height: auto; max-height: 92dvh; padding: 6px 24px 28px; }
-  .catalogue__bar { margin: 0 -24px; padding: 0 16px 0 24px; }
-  .catalogue__grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
-}
-@media (min-width: 960px) {
-  .catalogue__grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-}
 
 /* ── Header ───────────────────────────────────────────────────────── */
 .top__mark { display: inline-flex; align-items: center; gap: 10px; }
@@ -635,6 +697,6 @@ body {
   *, *::before, *::after { transition: none !important; }
   .arch--draw .arch__frame, .arch--draw .arch__glint { animation: none; stroke-dashoffset: 0; }
   .splash__name { animation: none; opacity: 1; }
-  .frame__sweep { animation: none; transform: none; top: auto; bottom: 0; height: 2px; background: var(--gold); border: 0; }
+  .stage__sweep { animation: none; transform: none; top: auto; bottom: 0; height: 2px; background: var(--gold); border: 0; }
   .meter--waiting span { animation: none; width: 100%; opacity: 0.4; }
 }

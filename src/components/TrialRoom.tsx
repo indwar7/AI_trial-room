@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { CatalogueItem } from "@/lib/catalogue";
-import { GENDERS, typesFor, type Category, type Gender } from "@/lib/garments";
+import { findType, type Gender } from "@/lib/garments";
 import type { Photo } from "@/lib/image";
 import { inPhoneApp, sharePicture } from "@/lib/native";
 import { runTryOn, type Stage } from "@/lib/tryon";
-import CatalogueModal from "./CatalogueModal";
-import PhotoSlot from "./PhotoSlot";
-import { DownloadIcon, GridIcon, HangerMark, PersonMark } from "./icons";
+import GarmentPane from "./GarmentPane";
+import PhotoButtons from "./PhotoButtons";
+import { CheckIcon, DownloadIcon, HangerMark, PersonMark } from "./icons";
 
 type Run =
   | { phase: "idle" }
@@ -16,26 +16,36 @@ type Run =
   | { phase: "done"; url: string }
   | { phase: "error"; message: string };
 
-const PICTURE_NAME = "mirror-fit-try-on.jpg";
+/** On a phone one step is on screen at a time; on a wide screen all three are. */
+type Step = "garment" | "person" | "result";
 
-/** How the garment types are laid out in step 3. */
-const TYPE_GROUPS: readonly { label: string; categories: readonly Category[] }[] = [
-  { label: "Tops", categories: ["upper_body"] },
-  { label: "Bottoms and dresses", categories: ["lower_body", "dresses"] },
+const STEPS: readonly { id: Step; label: string }[] = [
+  { id: "garment", label: "Garment" },
+  { id: "person", label: "Photo" },
+  { id: "result", label: "Result" },
 ];
+
+const PICTURE_NAME = "mirror-fit-try-on.jpg";
+const NARROW = "(max-width: 1023px)";
 
 function clock(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+function watchNarrow(onChange: () => void): () => void {
+  const query = window.matchMedia(NARROW);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
 export default function TrialRoom() {
   const [person, setPerson] = useState<Photo | null>(null);
   const [garment, setGarment] = useState<Photo | null>(null);
-  /** The catalogue garment in the frame, when that is where the photo came from. */
+  /** The catalogue garment in use. Null with a garment set means the store's own photo. */
   const [chosen, setChosen] = useState<CatalogueItem | null>(null);
-  const [catalogueOpen, setCatalogueOpen] = useState(false);
-  const [gender, setGender] = useState<Gender | null>(null);
-  const [typeId, setTypeId] = useState<string | null>(null);
+  const [gender, setGender] = useState<Gender>("male");
+  const [typeId, setTypeId] = useState("shirt");
+  const [step, setStep] = useState<Step>("garment");
   const [run, setRun] = useState<Run>({ phase: "idle" });
   const [elapsed, setElapsed] = useState(0);
   const [shareProblem, setShareProblem] = useState<string | null>(null);
@@ -46,20 +56,19 @@ export default function TrialRoom() {
   const inFlight = useRef<AbortController | null>(null);
   /** The picture on screen, held so it can be released. */
   const pictureUrl = useRef<string | null>(null);
-  const resultRef = useRef<HTMLElement>(null);
 
-  const types = typesFor(gender);
-  const type = types.find((t) => t.id === typeId) ?? null;
+  const narrow = useSyncExternalStore(
+    watchNarrow,
+    () => window.matchMedia(NARROW).matches,
+    () => false,
+  );
+
+  const type = findType(typeId);
   const busy = run.phase === "working";
+  const ready = person !== null && garment !== null && type !== undefined;
   /** Trousers, skirts and dresses can only be fitted when the legs are in the photo. */
-  const wholeBody = !!type && type.category !== "upper_body";
-
-  const missing = [
-    !person && "a photo of the person",
-    !garment && "a photo of the garment",
-    !gender && "male or female",
-    !type && "the garment type",
-  ].filter(Boolean) as string[];
+  const wholeBody = garment !== null && type !== undefined && type.category !== "upper_body";
+  const garmentName = chosen ? chosen.name : garment ? "Your garment" : null;
 
   useEffect(
     () => () => {
@@ -81,14 +90,14 @@ export default function TrialRoom() {
     if (run.phase === "done" || run.phase === "error") setRun({ phase: "idle" });
   }
 
-  function chooseGender(next: Gender) {
-    setGender(next);
-    if (typeId && !typesFor(next).some((t) => t.id === typeId)) setTypeId(null);
-    clearResult();
+  function go(next: Step) {
+    setStep(next);
+    // Each step starts at its top, whatever the last one was scrolled to.
+    window.scrollTo({ top: 0 });
   }
 
   async function start() {
-    if (!person || !garment || !gender || !type || busy) return;
+    if (!person || !garment || !type || busy) return;
     const controller = new AbortController();
     inFlight.current = controller;
     const current = () => inFlight.current === controller && !controller.signal.aborted;
@@ -97,8 +106,7 @@ export default function TrialRoom() {
     setShareProblem(null);
     setShowOriginal(false);
     setRun({ phase: "working", stage: { step: "connecting" } });
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    resultRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
+    go("result");
 
     try {
       const picture = await runTryOn({
@@ -147,169 +155,160 @@ export default function TrialRoom() {
     else statusLine = "Fitting the garment…";
   }
 
+  /**
+   * The one main button. On a wide screen it only ever starts the try-on. On
+   * a phone it also leads to whichever step still has something missing.
+   */
+  let main: { label: string; act?: () => void };
+  if (busy) main = { label: "Working…" };
+  else if (ready) main = { label: run.phase === "done" ? "Try it on again" : "Try it on", act: start };
+  else if (!narrow) main = { label: "Try it on" };
+  else if (!garment) {
+    main = step === "garment" ? { label: "Choose a garment" } : { label: "Choose a garment", act: () => go("garment") };
+  } else {
+    main =
+      step === "person"
+        ? { label: "Add the customer's photo" }
+        : { label: "Next: customer's photo", act: () => go("person") };
+  }
+
+  let hint = "";
+  if (!garment && !person) hint = "Choose a garment and add the customer's photo.";
+  else if (!garment) hint = "Choose a garment.";
+  else if (!person) hint = "Add the customer's photo.";
+
+  const finished: Record<Step, boolean> = {
+    garment: garment !== null,
+    person: person !== null,
+    result: run.phase === "done",
+  };
+
   return (
-    <main className="room">
-      <div className="room__inputs">
-        <div className="slots">
-          <PhotoSlot
-            kind="person"
-            step="Step 1"
-            title="The person"
-            hint={
-              wholeBody
-                ? "Standing straight, facing the camera, the whole body in view from head to feet."
-                : "Standing straight, facing the camera, head to hips in view."
-            }
-            cameraHint={
-              wholeBody
-                ? "Stand straight, face the camera, keep the whole body in the frame, head to feet."
-                : "Stand straight, face the camera, keep head to hips in the frame."
-            }
-            caption={
-              wholeBody ? "This garment needs a full-length photo, head to feet." : undefined
-            }
-            placeholder={<PersonMark />}
-            photo={person}
-            disabled={busy}
-            onPhoto={(p) => {
-              setPerson(p);
-              clearResult();
-            }}
-          />
-          <PhotoSlot
-            kind="garment"
-            step="Step 2"
-            title="The garment"
-            hint="Choose one from the catalogue, or photograph your own laid flat on a plain background."
-            cameraHint="Lay the garment flat and fill the frame with it."
-            placeholder={<HangerMark />}
-            caption={chosen?.name}
-            extraAction={
-              <button
-                type="button"
-                className="btn btn--ink"
-                disabled={busy}
-                onClick={() => setCatalogueOpen(true)}
-              >
-                <GridIcon />
-                Catalogue
-              </button>
-            }
-            photo={garment}
-            disabled={busy}
-            onPhoto={(p) => {
-              setGarment(p);
-              setChosen(null);
-              clearResult();
-            }}
-          />
-        </div>
-
-        <section className="details" aria-labelledby="details-title">
-          <p className="eyebrow">Step 3</p>
-          <h2 id="details-title" className="slot__title">
-            The details
-          </h2>
-          {chosen && (
-            <p className="details__note">Filled in from the catalogue. Change them if they are wrong.</p>
-          )}
-
-          <fieldset className="choice" disabled={busy}>
-            <legend>Who is wearing it</legend>
-            <div className="choice__row">
-              {GENDERS.map((g) => (
-                <label key={g.id} className="pill">
-                  <input
-                    type="radio"
-                    name="gender"
-                    value={g.id}
-                    checked={gender === g.id}
-                    onChange={() => chooseGender(g.id)}
-                  />
-                  <span>{g.label}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset className="choice" disabled={busy}>
-            <legend>What the garment is</legend>
-            {TYPE_GROUPS.map((group) => {
-              const inGroup = types.filter((t) => group.categories.includes(t.category));
-              if (inGroup.length === 0) return null;
-              return (
-                <div key={group.label} className="choice__group">
-                  <p className="choice__label">{group.label}</p>
-                  <div className="choice__row">
-                    {inGroup.map((t) => (
-                      <label key={t.id} className="pill">
-                        <input
-                          type="radio"
-                          name="type"
-                          value={t.id}
-                          checked={typeId === t.id}
-                          onChange={() => {
-                            setTypeId(t.id);
-                            clearResult();
-                          }}
-                        />
-                        <span>{t.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </fieldset>
-        </section>
-
-        <div className="go">
+    <main className="studio" data-step={step}>
+      <nav className="steps" aria-label="Steps">
+        {STEPS.map((s, index) => (
           <button
+            key={s.id}
             type="button"
-            className="btn btn--primary btn--large"
-            onClick={start}
-            disabled={busy || missing.length > 0}
+            className="steps__item"
+            aria-current={step === s.id ? "step" : undefined}
+            disabled={busy}
+            onClick={() => go(s.id)}
           >
-            {busy ? "Working…" : run.phase === "done" ? "Try it on again" : "Try it on"}
+            <span className="steps__num" aria-hidden="true">
+              {finished[s.id] ? <CheckIcon /> : index + 1}
+            </span>
+            {s.label}
           </button>
-          {missing.length > 0 && <p className="go__missing">Still needed: {missing.join(", ")}.</p>}
+        ))}
+      </nav>
+
+      <GarmentPane
+        garment={garment}
+        chosen={chosen}
+        gender={gender}
+        typeId={typeId}
+        disabled={busy}
+        onPick={(item, photo) => {
+          // A catalogue garment already says who it is for and what it is.
+          setGarment(photo);
+          setChosen(item);
+          setGender(item.gender);
+          setTypeId(item.typeId);
+          clearResult();
+        }}
+        onOwn={(photo, forGender, asTypeId) => {
+          setGarment(photo);
+          setChosen(null);
+          setGender(forGender);
+          setTypeId(asTypeId);
+          clearResult();
+        }}
+        onDetails={(forGender, asTypeId) => {
+          setGender(forGender);
+          setTypeId(asTypeId);
+          clearResult();
+        }}
+      />
+
+      <section className="pane pane--person" aria-labelledby="person-title">
+        <header className="pane__head">
+          <span className="pane__num" aria-hidden="true">
+            2
+          </span>
+          <h2 id="person-title">The customer</h2>
+        </header>
+
+        <div className={person ? "stage stage--filled" : "stage"}>
+          {person ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="stage__img" src={person.dataUrl} alt="Your photo of the customer" />
+          ) : (
+            <div className="stage__empty">
+              <PersonMark />
+              <p>
+                {wholeBody
+                  ? "Standing straight, facing the camera, the whole body in view from head to feet."
+                  : "Standing straight, facing the camera, head to hips in view."}
+              </p>
+            </div>
+          )}
         </div>
-      </div>
 
-      <section className="result" ref={resultRef} aria-labelledby="result-title">
-        <p className="eyebrow">The result</p>
-        <h2 id="result-title" className="slot__title">
-          The fitted look
-        </h2>
+        {wholeBody && (
+          <p className="pane__note">This garment needs a full-length photo, head to feet.</p>
+        )}
 
-        <div
-          className={run.phase === "done" ? "frame frame--result frame--filled" : "frame frame--result"}
-          style={person ? { aspectRatio: `${person.width} / ${person.height}` } : undefined}
-        >
+        <PhotoButtons
+          kind="person"
+          subject="the customer"
+          cameraHint={
+            wholeBody
+              ? "Stand straight, face the camera, keep the whole body in the frame, head to feet."
+              : "Stand straight, face the camera, keep head to hips in the frame."
+          }
+          hasPhoto={person !== null}
+          disabled={busy}
+          onPhoto={(photo) => {
+            setPerson(photo);
+            clearResult();
+          }}
+        />
+      </section>
+
+      <section className="pane pane--result" aria-labelledby="result-title">
+        <header className="pane__head">
+          <span className="pane__num" aria-hidden="true">
+            3
+          </span>
+          <h2 id="result-title">The fitted look</h2>
+        </header>
+
+        <div className={run.phase === "done" ? "stage stage--filled" : "stage"}>
           {run.phase === "done" ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              className="frame__img"
+              className="stage__img stage__img--result"
               src={showOriginal && person ? person.dataUrl : run.url}
               alt={
                 showOriginal
-                  ? "The photo of the person, before the try-on"
-                  : `The person wearing the ${type ? type.label.toLowerCase() : "garment"}`
+                  ? "The photo of the customer, before the try-on"
+                  : `The customer wearing the ${type ? type.label.toLowerCase() : "garment"}`
               }
             />
           ) : (
             <>
               {busy && person && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img className="frame__img frame__img--waiting" src={person.dataUrl} alt="" />
+                <img className="stage__img stage__img--waiting" src={person.dataUrl} alt="" />
               )}
-              {busy && <div className="frame__sweep" aria-hidden="true" />}
+              {busy && <div className="stage__sweep" aria-hidden="true" />}
               {!busy && (
-                <div className="frame__empty">
+                <div className="stage__empty">
                   <p>
                     {run.phase === "error"
                       ? "No picture this time."
-                      : "The person wearing the garment appears here."}
+                      : "The customer wearing the garment appears here."}
                   </p>
                 </div>
               )}
@@ -362,19 +361,18 @@ export default function TrialRoom() {
               </div>
               <div className="result__actions">
                 {inPhoneApp() ? (
-                  <button type="button" className="btn btn--primary" onClick={() => share(run.url)}>
+                  <button type="button" className="btn btn--ink" onClick={() => share(run.url)}>
                     <DownloadIcon />
-                    Save or share the picture
+                    Save or share
                   </button>
                 ) : (
-                  <a className="btn btn--primary" href={run.url} download={PICTURE_NAME}>
+                  <a className="btn btn--ink" href={run.url} download={PICTURE_NAME}>
                     <DownloadIcon />
-                    Download the picture
+                    Download
                   </a>
                 )}
-                <button type="button" className="btn" onClick={() => setCatalogueOpen(true)}>
-                  <GridIcon />
-                  Try another garment
+                <button type="button" className="btn" onClick={() => go("garment")}>
+                  Another garment
                 </button>
               </div>
             </>
@@ -387,23 +385,30 @@ export default function TrialRoom() {
         </div>
       </section>
 
-      {catalogueOpen && (
-        <CatalogueModal
-          gender={gender}
-          typeId={typeId}
-          chosenId={chosen?.id ?? null}
-          onPick={(item, photo) => {
-            // A catalogue garment already says who it is for and what it is.
-            setGarment(photo);
-            setChosen(item);
-            setGender(item.gender);
-            setTypeId(item.typeId);
-            clearResult();
-            setCatalogueOpen(false);
-          }}
-          onClose={() => setCatalogueOpen(false)}
-        />
-      )}
+      <div className="bar">
+        <div className="bar__picks" aria-hidden="true">
+          <span className={garment ? "bar__thumb bar__thumb--filled" : "bar__thumb"}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {garment ? <img src={garment.dataUrl} alt="" /> : <HangerMark />}
+          </span>
+          <span className={person ? "bar__thumb bar__thumb--filled" : "bar__thumb"}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {person ? <img src={person.dataUrl} alt="" /> : <PersonMark />}
+          </span>
+          {garmentName && <span className="bar__name">{garmentName}</span>}
+        </div>
+        <div className="go">
+          <button
+            type="button"
+            className="btn btn--primary btn--large"
+            onClick={main.act}
+            disabled={!main.act}
+          >
+            {main.label}
+          </button>
+        </div>
+        {hint && !busy && <p className="bar__hint">{hint}</p>}
+      </div>
     </main>
   );
 }

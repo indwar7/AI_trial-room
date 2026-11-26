@@ -31,9 +31,9 @@ export const UploadIcon = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 
-export const GridIcon = (p: SVGProps<SVGSVGElement>) => (
+export const CheckIcon = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
-    <path d="M4.5 4.5h6v6h-6zM13.5 4.5h6v6h-6zM4.5 13.5h6v6h-6zM13.5 13.5h6v6h-6z" />
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
   </Icon>
 );
 

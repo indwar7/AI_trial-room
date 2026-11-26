@@ -18,7 +18,9 @@ The sign-in keeps other people out of the app. The try-on itself still runs betw
 
 ## The catalogue
 
-The garment slot has a Catalogue button: 40 sample garments, five each of shirts, T-shirts, jackets and jeans, for men and for women. Picking one fills in the garment photo, who it is for and what it is, so only the person's photo is left to add.
+The trial room opens on the catalogue: 40 sample garments, five each of shirts, T-shirts, jackets and jeans, for men and for women. Picking one also tells the try-on who it is for and what it is, so only the customer's photo is left to add. A sixth tile takes the store's own garment, by camera or upload.
+
+On a wide screen the catalogue, the customer's photo and the result sit side by side and nothing scrolls. On a phone they are three steps with the main button always at the bottom.
 
 - The list is in `src/lib/catalogue.ts`. Each garment is a 768 x 1024 photo on white in `public/catalogue/`, with a 384 x 512 copy in `public/catalogue/thumb/`.
 - To add a garment, put the two files there under a name like `men-shirt-6.jpg` and add a line to the list. For a new garment type, add it to `CATALOGUE_TYPES` as well, using a type id from `src/lib/garments.ts`.
@@ -49,11 +51,12 @@ A standard Next.js app. It needs the three environment variables listed under Lo
 
 | Path | Role |
 | --- | --- |
-| `src/components/TrialRoom.tsx` | The page: two photo slots, the choices, the result |
+| `src/components/TrialRoom.tsx` | The trial room: the three panes, the steps on a phone, the result |
 | `src/components/CameraModal.tsx` | In-browser camera with a 3:4 viewfinder |
 | `src/lib/image.ts` | Shrinks photos in the browser before they are sent, and tidies the result |
 | `src/lib/garments.ts` | Garment types and which garment area each maps to |
-| `src/lib/catalogue.ts`, `src/components/CatalogueModal.tsx` | The sample catalogue and its picker |
+| `src/lib/catalogue.ts`, `src/components/GarmentPane.tsx` | The sample catalogue and the pane that shows it |
+| `src/components/PhotoButtons.tsx` | Camera and upload buttons, used for the customer and for the store's own garment |
 | `src/lib/tryon.ts` | Calls the demo servers with `@gradio/client` |
 
 Three servers are used. Each garment goes to the first one in its row, and to the next if that one fails:
