@@ -14,6 +14,10 @@ interface Props {
   /** Shown under the camera viewfinder. */
   cameraHint: string;
   placeholder: ReactNode;
+  /** Names the photo in the frame, when it has a name. */
+  caption?: string;
+  /** Another way to fill the slot, shown above the camera and upload buttons. */
+  extraAction?: ReactNode;
   photo: Photo | null;
   disabled: boolean;
   onPhoto: (photo: Photo) => void;
@@ -26,6 +30,8 @@ export default function PhotoSlot({
   hint,
   cameraHint,
   placeholder,
+  caption,
+  extraAction,
   photo,
   disabled,
   onPhoto,
@@ -62,6 +68,9 @@ export default function PhotoSlot({
           </div>
         )}
       </div>
+
+      {caption && <p className="slot__caption">{caption}</p>}
+      {extraAction && <div className="slot__extra">{extraAction}</div>}
 
       <div className="slot__actions">
         <button

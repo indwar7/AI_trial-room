@@ -16,6 +16,14 @@ Environment variables on Vercel: `BLOB_READ_WRITE_TOKEN` (added by the Blob stor
 
 The sign-in keeps other people out of the app. The try-on itself still runs between the browser and the public demo servers.
 
+## The catalogue
+
+The garment slot has a Catalogue button: 40 sample garments, five each of shirts, T-shirts, jackets and jeans, for men and for women. Picking one fills in the garment photo, who it is for and what it is, so only the person's photo is left to add.
+
+- The list is in `src/lib/catalogue.ts`. Each garment is a 768 x 1024 photo on white in `public/catalogue/`, with a 384 x 512 copy in `public/catalogue/thumb/`.
+- To add a garment, put the two files there under a name like `men-shirt-6.jpg` and add a line to the list. For a new garment type, add it to `CATALOGUE_TYPES` as well, using a type id from `src/lib/garments.ts`.
+- The sample photos are computer-generated product shots, not real products of any brand. A store should replace them with photos of what it sells.
+
 ## The free limit
 
 The demo servers give each network (IP address) a free allowance of GPU time per day. Measured on 24 Nov 2026 it was 180 seconds, and one top used about 20 seconds of it. Everyone on the same Wi-Fi shares the allowance; a phone on mobile data has its own.
@@ -45,6 +53,7 @@ A standard Next.js app. It needs the three environment variables listed under Lo
 | `src/components/CameraModal.tsx` | In-browser camera with a 3:4 viewfinder |
 | `src/lib/image.ts` | Shrinks photos in the browser before they are sent, and tidies the result |
 | `src/lib/garments.ts` | Garment types and which garment area each maps to |
+| `src/lib/catalogue.ts`, `src/components/CatalogueModal.tsx` | The sample catalogue and its picker |
 | `src/lib/tryon.ts` | Calls the demo servers with `@gradio/client` |
 
 Three servers are used. Each garment goes to the first one in its row, and to the next if that one fails:

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { CatalogueItem } from "@/lib/catalogue";
 import { GENDERS, typesFor, type Gender } from "@/lib/garments";
 import type { Photo } from "@/lib/image";
 import { inPhoneApp, sharePicture } from "@/lib/native";
 import { runTryOn, type Stage } from "@/lib/tryon";
+import CatalogueModal from "./CatalogueModal";
 import PhotoSlot from "./PhotoSlot";
-import { DownloadIcon, HangerMark, PersonMark } from "./icons";
+import { DownloadIcon, GridIcon, HangerMark, PersonMark } from "./icons";
 
 type Run =
   | { phase: "idle" }
@@ -23,6 +25,9 @@ function clock(seconds: number): string {
 export default function TrialRoom() {
   const [person, setPerson] = useState<Photo | null>(null);
   const [garment, setGarment] = useState<Photo | null>(null);
+  /** The catalogue garment in the frame, when that is where the photo came from. */
+  const [chosen, setChosen] = useState<CatalogueItem | null>(null);
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [gender, setGender] = useState<Gender | null>(null);
   const [typeId, setTypeId] = useState<string | null>(null);
   const [run, setRun] = useState<Run>({ phase: "idle" });
@@ -38,6 +43,8 @@ export default function TrialRoom() {
   const types = typesFor(gender);
   const type = types.find((t) => t.id === typeId) ?? null;
   const busy = run.phase === "working";
+  /** Trousers, skirts and dresses can only be fitted when the legs are in the photo. */
+  const wholeBody = !!type && type.category !== "upper_body";
 
   const missing = [
     !person && "a photo of the person",
@@ -139,8 +146,19 @@ export default function TrialRoom() {
             kind="person"
             step="Step 1"
             title="The person"
-            hint="Standing straight, facing the camera, head to hips in view."
-            cameraHint="Stand straight, face the camera, keep head to hips in the frame."
+            hint={
+              wholeBody
+                ? "Standing straight, facing the camera, the whole body in view from head to feet."
+                : "Standing straight, facing the camera, head to hips in view."
+            }
+            cameraHint={
+              wholeBody
+                ? "Stand straight, face the camera, keep the whole body in the frame, head to feet."
+                : "Stand straight, face the camera, keep head to hips in the frame."
+            }
+            caption={
+              wholeBody ? "This garment needs a full-length photo, head to feet." : undefined
+            }
             placeholder={<PersonMark />}
             photo={person}
             disabled={busy}
@@ -153,13 +171,26 @@ export default function TrialRoom() {
             kind="garment"
             step="Step 2"
             title="The garment"
-            hint="Laid flat or on a hanger, the whole garment in view, plain background."
+            hint="Choose one from the catalogue, or photograph your own laid flat on a plain background."
             cameraHint="Lay the garment flat and fill the frame with it."
             placeholder={<HangerMark />}
+            caption={chosen?.name}
+            extraAction={
+              <button
+                type="button"
+                className="btn btn--ink"
+                disabled={busy}
+                onClick={() => setCatalogueOpen(true)}
+              >
+                <GridIcon />
+                Catalogue
+              </button>
+            }
             photo={garment}
             disabled={busy}
             onPhoto={(p) => {
               setGarment(p);
+              setChosen(null);
               clearResult();
             }}
           />
@@ -302,6 +333,24 @@ export default function TrialRoom() {
           )}
         </div>
       </section>
+
+      {catalogueOpen && (
+        <CatalogueModal
+          gender={gender}
+          typeId={typeId}
+          chosenId={chosen?.id ?? null}
+          onPick={(item, photo) => {
+            // A catalogue garment already says who it is for and what it is.
+            setGarment(photo);
+            setChosen(item);
+            setGender(item.gender);
+            setTypeId(item.typeId);
+            clearResult();
+            setCatalogueOpen(false);
+          }}
+          onClose={() => setCatalogueOpen(false)}
+        />
+      )}
     </main>
   );
 }
