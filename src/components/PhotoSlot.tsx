@@ -52,10 +52,12 @@ export default function PhotoSlot({
 
   return (
     <section className="slot" aria-labelledby={`${kind}-title`}>
-      <p className="eyebrow">{step}</p>
-      <h2 id={`${kind}-title`} className="slot__title">
-        {title}
-      </h2>
+      <div className="slot__head">
+        <p className="eyebrow">{step}</p>
+        <h2 id={`${kind}-title`} className="slot__title">
+          {title}
+        </h2>
+      </div>
 
       <div className={photo ? "frame frame--filled" : "frame"}>
         {photo ? (
@@ -69,10 +71,13 @@ export default function PhotoSlot({
         )}
       </div>
 
-      {caption && <p className="slot__caption">{caption}</p>}
-      {extraAction && <div className="slot__extra">{extraAction}</div>}
+      <div className="slot__body">
+        {/* On a phone the frame is too small to hold the hint, so it sits beside it. */}
+        {!photo && <p className="slot__hint">{hint}</p>}
+        {caption && <p className="slot__caption">{caption}</p>}
+        {extraAction && <div className="slot__extra">{extraAction}</div>}
 
-      <div className="slot__actions">
+        <div className="slot__actions">
         <button
           type="button"
           className="btn"
@@ -106,13 +111,14 @@ export default function PhotoSlot({
             void onFile(file);
           }}
         />
-      </div>
+        </div>
 
-      {problem && (
-        <p className="problem" role="alert">
-          {problem}
-        </p>
-      )}
+        {problem && (
+          <p className="problem" role="alert">
+            {problem}
+          </p>
+        )}
+      </div>
 
       {cameraOpen && (
         <CameraModal

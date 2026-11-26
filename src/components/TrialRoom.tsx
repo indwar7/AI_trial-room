@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CatalogueItem } from "@/lib/catalogue";
-import { GENDERS, typesFor, type Gender } from "@/lib/garments";
+import { GENDERS, typesFor, type Category, type Gender } from "@/lib/garments";
 import type { Photo } from "@/lib/image";
 import { inPhoneApp, sharePicture } from "@/lib/native";
 import { runTryOn, type Stage } from "@/lib/tryon";
@@ -17,6 +17,12 @@ type Run =
   | { phase: "error"; message: string };
 
 const PICTURE_NAME = "mirror-fit-try-on.jpg";
+
+/** How the garment types are laid out in step 3. */
+const TYPE_GROUPS: readonly { label: string; categories: readonly Category[] }[] = [
+  { label: "Tops", categories: ["upper_body"] },
+  { label: "Bottoms and dresses", categories: ["lower_body", "dresses"] },
+];
 
 function clock(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -33,6 +39,8 @@ export default function TrialRoom() {
   const [run, setRun] = useState<Run>({ phase: "idle" });
   const [elapsed, setElapsed] = useState(0);
   const [shareProblem, setShareProblem] = useState<string | null>(null);
+  /** With a result on screen: look at the photo it was made from instead. */
+  const [showOriginal, setShowOriginal] = useState(false);
 
   /** Stops whichever try-on is in flight. */
   const inFlight = useRef<AbortController | null>(null);
@@ -87,6 +95,7 @@ export default function TrialRoom() {
 
     setElapsed(0);
     setShareProblem(null);
+    setShowOriginal(false);
     setRun({ phase: "working", stage: { step: "connecting" } });
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     resultRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
@@ -201,6 +210,9 @@ export default function TrialRoom() {
           <h2 id="details-title" className="slot__title">
             The details
           </h2>
+          {chosen && (
+            <p className="details__note">Filled in from the catalogue. Change them if they are wrong.</p>
+          )}
 
           <fieldset className="choice" disabled={busy}>
             <legend>Who is wearing it</legend>
@@ -222,23 +234,32 @@ export default function TrialRoom() {
 
           <fieldset className="choice" disabled={busy}>
             <legend>What the garment is</legend>
-            <div className="choice__row">
-              {types.map((t) => (
-                <label key={t.id} className="pill">
-                  <input
-                    type="radio"
-                    name="type"
-                    value={t.id}
-                    checked={typeId === t.id}
-                    onChange={() => {
-                      setTypeId(t.id);
-                      clearResult();
-                    }}
-                  />
-                  <span>{t.label}</span>
-                </label>
-              ))}
-            </div>
+            {TYPE_GROUPS.map((group) => {
+              const inGroup = types.filter((t) => group.categories.includes(t.category));
+              if (inGroup.length === 0) return null;
+              return (
+                <div key={group.label} className="choice__group">
+                  <p className="choice__label">{group.label}</p>
+                  <div className="choice__row">
+                    {inGroup.map((t) => (
+                      <label key={t.id} className="pill">
+                        <input
+                          type="radio"
+                          name="type"
+                          value={t.id}
+                          checked={typeId === t.id}
+                          onChange={() => {
+                            setTypeId(t.id);
+                            clearResult();
+                          }}
+                        />
+                        <span>{t.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </fieldset>
         </section>
 
@@ -269,8 +290,12 @@ export default function TrialRoom() {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               className="frame__img"
-              src={run.url}
-              alt={`The person wearing the ${type ? type.label.toLowerCase() : "garment"}`}
+              src={showOriginal && person ? person.dataUrl : run.url}
+              alt={
+                showOriginal
+                  ? "The photo of the person, before the try-on"
+                  : `The person wearing the ${type ? type.label.toLowerCase() : "garment"}`
+              }
             />
           ) : (
             <>
@@ -302,6 +327,7 @@ export default function TrialRoom() {
                 <span>{statusLine}</span>
                 <span className="result__clock">{clock(elapsed)}</span>
               </p>
+              <p className="result__note">This usually takes about half a minute.</p>
               <button type="button" className="btn btn--quiet" onClick={cancel}>
                 Cancel
               </button>
@@ -314,18 +340,45 @@ export default function TrialRoom() {
             </p>
           )}
 
-          {run.phase === "done" &&
-            (inPhoneApp() ? (
-              <button type="button" className="btn btn--primary" onClick={() => share(run.url)}>
-                <DownloadIcon />
-                Save or share the picture
-              </button>
-            ) : (
-              <a className="btn btn--primary" href={run.url} download={PICTURE_NAME}>
-                <DownloadIcon />
-                Download the picture
-              </a>
-            ))}
+          {run.phase === "done" && (
+            <>
+              <div className="compare" role="group" aria-label="Which picture to show">
+                <button
+                  type="button"
+                  className="compare__side"
+                  aria-pressed={!showOriginal}
+                  onClick={() => setShowOriginal(false)}
+                >
+                  Fitted look
+                </button>
+                <button
+                  type="button"
+                  className="compare__side"
+                  aria-pressed={showOriginal}
+                  onClick={() => setShowOriginal(true)}
+                >
+                  Original photo
+                </button>
+              </div>
+              <div className="result__actions">
+                {inPhoneApp() ? (
+                  <button type="button" className="btn btn--primary" onClick={() => share(run.url)}>
+                    <DownloadIcon />
+                    Save or share the picture
+                  </button>
+                ) : (
+                  <a className="btn btn--primary" href={run.url} download={PICTURE_NAME}>
+                    <DownloadIcon />
+                    Download the picture
+                  </a>
+                )}
+                <button type="button" className="btn" onClick={() => setCatalogueOpen(true)}>
+                  <GridIcon />
+                  Try another garment
+                </button>
+              </div>
+            </>
+          )}
           {shareProblem && (
             <p className="problem" role="alert">
               {shareProblem}

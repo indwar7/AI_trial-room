@@ -79,8 +79,8 @@ export default function App() {
           <div className="intro">
             <h1>Try it on without putting it on.</h1>
             <p>
-              Take a photo of the person, take a photo of the garment, and the AI shows the
-              garment fitted on them.
+              Add a photo of the person, choose a garment from the catalogue or photograph your
+              own, and see it fitted on them.
             </p>
           </div>
           <TrialRoom />

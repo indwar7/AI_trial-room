@@ -23,6 +23,8 @@ export const metadata: Metadata = {
   title,
   description,
   applicationName: "Mirror Fit",
+  // A tool behind a sign-in has nothing for a search engine to list.
+  robots: { index: false, follow: false },
   manifest: "/manifest.webmanifest",
   appleWebApp: { title: "Mirror Fit" },
   openGraph: { title, description, siteName: "Mirror Fit", type: "website" },
