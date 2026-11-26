@@ -20,8 +20,7 @@ The sign-in keeps other people out of the app. The try-on itself still runs betw
 
 The demo servers give each network (IP address) a free allowance of GPU time per day. Measured on 24 Nov 2026 it was 180 seconds, and one top used about 20 seconds of it. Everyone on the same Wi-Fi shares the allowance; a phone on mobile data has its own.
 
-- Tops: several a day. A run is refused once too little allowance is left, which should work out to six or seven a day. That figure is estimated from the numbers above, not counted.
-- Trousers, skirts and dresses: these run on a second server that asks for the full 180 seconds up front. In testing it worked as the first try-on of the day and was refused after anything else had run.
+Every garment type now runs on a server that asks for 60 seconds per try-on, so a run is refused once less than that is left. That should work out to six or seven try-ons a day per network; the figure is estimated from the numbers above, not counted.
 
 When the allowance runs out the site says so and, where the server gives one, shows the time until it resets.
 
@@ -48,14 +47,16 @@ A standard Next.js app. It needs the three environment variables listed under Lo
 | `src/lib/garments.ts` | Garment types and which garment area each maps to |
 | `src/lib/tryon.ts` | Calls the demo servers with `@gradio/client` |
 
-Two servers are used, in this order:
+Three servers are used. Each garment goes to the first one in its row, and to the next if that one fails:
 
-| Server | Garments | Licence |
+| Garments | First | Then |
 | --- | --- | --- |
-| [yisol/IDM-VTON](https://huggingface.co/spaces/yisol/IDM-VTON) | tops | CC BY-NC-SA 4.0 (non-commercial) |
-| [franciszzj/Leffa](https://huggingface.co/spaces/franciszzj/Leffa) | tops (fallback), trousers, skirts, dresses | MIT |
+| Tops | [yisol/IDM-VTON](https://huggingface.co/spaces/yisol/IDM-VTON) | [levihsu/OOTDiffusion](https://huggingface.co/spaces/levihsu/OOTDiffusion), then [franciszzj/Leffa](https://huggingface.co/spaces/franciszzj/Leffa) |
+| Trousers, skirts, dresses | levihsu/OOTDiffusion | franciszzj/Leffa |
 
-These are other people's public demos. They can be slow, queued, changed or taken offline without notice, and IDM-VTON's licence does not allow commercial use.
+IDM-VTON and OOTDiffusion are licensed CC BY-NC-SA 4.0 (non-commercial); Leffa is MIT. Leffa asks for the whole day's allowance for one run, so it rarely gets to run and is only a last resort.
+
+These are other people's public demos. They can be slow, queued, changed or taken offline without notice, and the two non-commercial licences do not allow commercial use.
 
 ## Photo tips
 

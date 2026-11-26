@@ -6,7 +6,7 @@
  */
 
 import { describeGarment, type Category, type Gender, type GarmentType } from "./garments";
-import { finishPicture, photoToBlob, type Photo } from "./image";
+import { finishPicture, padToFrame, photoToBlob, type Photo } from "./image";
 
 export type Stage =
   | { step: "connecting" }
@@ -47,8 +47,14 @@ interface Server {
   space: string;
   endpoint: string;
   categories: readonly Category[];
-  /** True when the server pads a tall photo to 3:4 with white side bars. */
-  padsTallPhotos: boolean;
+  /**
+   * How a photo taller than 3:4 reaches the 3:4 frame the model works in:
+   * the server keeps its shape, the server adds white side bars itself, or
+   * the server would stretch it, so we add the bars before sending.
+   */
+  tallPhotos: "kept" | "server-pads" | "pad-first";
+  /** True when one run asks for the whole day's free allowance up front. */
+  needsWholeAllowance?: boolean;
   payload: (
     files: Files,
     request: TryOnRequest,
@@ -57,6 +63,8 @@ interface Server {
 }
 
 const STEPS = 30;
+/** OOTDiffusion's own default, and the fewest it accepts. */
+const OOTD_STEPS = 20;
 /** How long a server gets to answer the first hello, and then to finish. */
 const CONNECT_TIMEOUT_MS = 30 * 1000;
 const SERVER_TIMEOUT_MS = 4 * 60 * 1000;
@@ -66,7 +74,7 @@ const IDM_VTON: Server = {
   space: "yisol/IDM-VTON",
   endpoint: "/tryon",
   categories: ["upper_body"],
-  padsTallPhotos: false,
+  tallPhotos: "kept",
   payload: ({ person, garment }, request, file) => ({
     dict: { background: file(person), layers: [], composite: null },
     garm_img: file(garment),
@@ -78,12 +86,46 @@ const IDM_VTON: Server = {
   }),
 };
 
+/** OOTDiffusion. Trousers, skirts and dresses, on the same light allowance as a top. */
+const OOTD_FULL_BODY: Server = {
+  space: "levihsu/OOTDiffusion",
+  endpoint: "/process_dc",
+  categories: ["lower_body", "dresses"],
+  tallPhotos: "pad-first",
+  payload: ({ person, garment }, request, file) => ({
+    vton_img: file(person),
+    garm_img: file(garment),
+    category: request.type.category === "lower_body" ? "Lower-body" : "Dress",
+    n_samples: 1,
+    n_steps: OOTD_STEPS,
+    image_scale: 2,
+    seed: randomSeed(),
+  }),
+};
+
+/** OOTDiffusion again, standing in for tops when IDM-VTON is down. */
+const OOTD_TOPS: Server = {
+  space: "levihsu/OOTDiffusion",
+  endpoint: "/process_hd",
+  categories: ["upper_body"],
+  tallPhotos: "pad-first",
+  payload: ({ person, garment }, _request, file) => ({
+    vton_img: file(person),
+    garm_img: file(garment),
+    n_samples: 1,
+    n_steps: OOTD_STEPS,
+    image_scale: 2,
+    seed: randomSeed(),
+  }),
+};
+
 /** Leffa. Handles every garment area, but each run needs the full free allowance. */
 const LEFFA: Server = {
   space: "franciszzj/Leffa",
   endpoint: "/leffa_predict_vt",
   categories: ["upper_body", "lower_body", "dresses"],
-  padsTallPhotos: true,
+  tallPhotos: "server-pads",
+  needsWholeAllowance: true,
   payload: ({ person, garment }, request, file) => ({
     src_image_path: file(person),
     ref_image_path: file(garment),
@@ -97,8 +139,8 @@ const LEFFA: Server = {
   }),
 };
 
-/** In the order they are tried. */
-const SERVERS: readonly Server[] = [IDM_VTON, LEFFA];
+/** In the order they are tried, for the garment areas each one handles. */
+const SERVERS: readonly Server[] = [IDM_VTON, OOTD_FULL_BODY, OOTD_TOPS, LEFFA];
 
 function randomSeed(): number {
   return Math.floor(Math.random() * 1_000_000);
@@ -122,13 +164,8 @@ function resetIn(raw: string): string {
  * ("You have exceeded your ZeroGPU runs limit."). Returns null for anything
  * else.
  */
-export function quotaMessage(raw: string, category: Category): string | null {
+export function quotaMessage(raw: string): string | null {
   if (!/quota|runs limit/i.test(raw)) return null;
-  if (category !== "upper_body") {
-    // These only run on the server that needs the whole allowance, so
-    // being refused here says nothing about tops.
-    return `Today's free allowance for trousers, skirts and dresses is used up on this network. Tops may still work.${resetIn(raw)}`;
-  }
   return `Today's free try-ons on this network are used up.${resetIn(raw)}`;
 }
 
@@ -166,6 +203,16 @@ function within<T>(work: Promise<T>, ms: number, signal: AbortSignal): Promise<T
   });
 }
 
+/** Where the picture is in a server's answer: a single file, or the first file of a gallery. */
+function pictureUrl(data: unknown): string | null {
+  const first: unknown = Array.isArray(data) ? data[0] : null;
+  const item: unknown = Array.isArray(first) ? first[0] : first;
+  if (!item || typeof item !== "object") return null;
+  const file: unknown = "image" in item ? item.image : item;
+  const url = file && typeof file === "object" && "url" in file ? file.url : null;
+  return typeof url === "string" ? url : null;
+}
+
 /** Follows a job to its picture, reporting progress on the way. */
 async function pictureFrom(job: AsyncIterable<unknown>, request: TryOnRequest): Promise<Blob> {
   const { signal, onStage } = request;
@@ -174,7 +221,7 @@ async function pictureFrom(job: AsyncIterable<unknown>, request: TryOnRequest): 
     if (event.type === "status") {
       if (event.stage === "error") {
         const text = `${event.title ?? ""} ${event.message ?? ""}`.trim();
-        const quota = quotaMessage(text, request.type.category);
+        const quota = quotaMessage(text);
         if (quota) throw new QuotaError(quota);
         throw new Error(text || "The server reported an error.");
       }
@@ -184,9 +231,9 @@ async function pictureFrom(job: AsyncIterable<unknown>, request: TryOnRequest): 
         onStage({ step: "fitting" });
       }
     } else if (event.type === "data") {
-      const first = Array.isArray(event.data) ? (event.data[0] as { url?: string } | null) : null;
-      if (!first?.url) throw new Error("The server returned no picture.");
-      const picture = await fetch(first.url, { signal });
+      const url = pictureUrl(event.data);
+      if (!url) throw new Error("The server returned no picture.");
+      const picture = await fetch(url, { signal });
       if (!picture.ok) throw new Error(`The picture could not be fetched (${picture.status}).`);
       return await picture.blob();
     }
@@ -228,21 +275,26 @@ export async function runTryOn(request: TryOnRequest): Promise<Blob> {
     garment: await photoToBlob(request.garment),
   };
   const servers = SERVERS.filter((s) => s.categories.includes(request.type.category));
+  const shape = request.person.width / request.person.height;
+  let framed: Blob | null = null;
   let anotherFailed = false;
 
   for (const server of servers) {
     try {
-      const picture = await runOn(server, files, request);
-      const tall = request.person.width / request.person.height;
-      return await finishPicture(picture, server.padsTallPhotos ? tall : null);
+      let person = files.person;
+      if (server.tallPhotos === "pad-first") person = framed ??= await padToFrame(files.person);
+      const picture = await runOn(server, { ...files, person }, request);
+      // Side bars added on the way in, by us or by the server, come off again.
+      return await finishPicture(picture, server.tallPhotos === "kept" ? null : shape);
     } catch (err) {
       if (request.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
         throw new DOMException("Cancelled", "AbortError");
       }
       if (err instanceof QuotaError) {
-        // The stand-in server needs far more allowance than the first one,
-        // so its refusal does not mean the day's try-ons are used up.
-        if (anotherFailed) break;
+        // A server that asks for the whole day's allowance refuses long
+        // before the day's try-ons are really used up, so after another
+        // server has failed its refusal is not the thing to report.
+        if (server.needsWholeAllowance && anotherFailed) break;
         throw new TryOnError(err.message);
       }
       anotherFailed = true;

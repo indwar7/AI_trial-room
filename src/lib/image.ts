@@ -93,6 +93,31 @@ export async function photoToBlob(photo: Photo): Promise<Blob> {
  * model padded a tall photo with white side bars to reach 3:4, and those
  * bars are cut off again.
  */
+function toJpeg(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("The picture could not be saved."))),
+      "image/jpeg",
+      0.92,
+    );
+  });
+}
+
+/**
+ * Adds white side bars to a photo taller than 3:4 so that it is exactly
+ * 3:4. Some servers stretch whatever they are given to that shape.
+ */
+export async function padToFrame(photo: Blob): Promise<Blob> {
+  const img = await loadImage(photo);
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  if (w / h >= FRAME_RATIO - 0.005) return photo;
+  const width = Math.round(h * FRAME_RATIO);
+  const { canvas, ctx } = canvasOf(width, h);
+  ctx.drawImage(img, Math.round((width - w) / 2), 0);
+  return toJpeg(canvas);
+}
+
 export async function finishPicture(picture: Blob, contentRatio: number | null): Promise<Blob> {
   const img = await loadImage(picture);
   const h = img.naturalHeight;
@@ -105,13 +130,7 @@ export async function finishPicture(picture: Blob, contentRatio: number | null):
   }
   const { canvas, ctx } = canvasOf(w, h);
   ctx.drawImage(img, x, 0, w, h, 0, 0, w, h);
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("The picture could not be saved."))),
-      "image/jpeg",
-      0.92,
-    );
-  });
+  return toJpeg(canvas);
 }
 
 function loadImage(file: Blob): Promise<HTMLImageElement> {
