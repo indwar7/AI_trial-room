@@ -55,6 +55,8 @@ export default function TrialRoom() {
   const [shareProblem, setShareProblem] = useState<string | null>(null);
   /** With a result on screen: look at the photo it was made from instead. */
   const [showOriginal, setShowOriginal] = useState(false);
+  /** Goes up each time the catalogue should call for attention. */
+  const [nudge, setNudge] = useState(0);
 
   /** Stops whichever try-on is in flight. */
   const inFlight = useRef<AbortController | null>(null);
@@ -144,6 +146,18 @@ export default function TrialRoom() {
     }
   }
 
+  /**
+   * Back to choosing a design. The fabric and the customer's photo stay, and
+   * so does the picture on screen until another design is picked. On a wide
+   * screen the catalogue is already in view, so it is flashed to show where
+   * to look.
+   */
+  function newGarment() {
+    setDesign(null);
+    setNudge((n) => n + 1);
+    go("garment");
+  }
+
   function cancel() {
     inFlight.current?.abort();
     inFlight.current = null;
@@ -216,6 +230,7 @@ export default function TrialRoom() {
         fabric={fabric}
         scale={scale}
         disabled={busy}
+        nudge={nudge}
         onPick={(picked) => {
           setDesign(picked);
           clearResult();
@@ -378,7 +393,7 @@ export default function TrialRoom() {
                     Download
                   </a>
                 )}
-                <button type="button" className="btn" onClick={() => go("garment")}>
+                <button type="button" className="btn" onClick={newGarment}>
                   New garment
                 </button>
               </div>

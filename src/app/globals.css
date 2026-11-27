@@ -138,6 +138,12 @@ body {
   font-size: 12.5px; font-weight: 500; color: var(--ink-2);
 }
 .pane__note { margin-top: 10px; font-size: 13.5px; color: var(--ink-2); }
+/* "Look here": after New garment, the catalogue is ringed for a moment. */
+.pane--nudge { animation: nudge 1.4s ease-out 1; }
+@keyframes nudge {
+  0%, 35% { box-shadow: 0 0 0 3px var(--berry); }
+  100% { box-shadow: 0 0 0 3px rgba(168, 25, 78, 0); }
+}
 
 /* Steps (phone) */
 .steps {
@@ -706,6 +712,7 @@ button.garment:disabled { cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
   .arch--draw .arch__frame, .arch--draw .arch__glint { animation: none; stroke-dashoffset: 0; }
+  .pane--nudge { animation: none; }
   .splash__name { animation: none; opacity: 1; }
   .stage__sweep { animation: none; transform: none; top: auto; bottom: 0; height: 2px; background: var(--gold); border: 0; }
   .meter--waiting span { animation: none; width: 100%; opacity: 0.4; }

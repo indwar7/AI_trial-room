@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CATALOGUE_GENDERS,
   CATALOGUE_TYPES,
@@ -18,18 +18,32 @@ interface Props {
   fabric: Fabric | null;
   scale: number;
   disabled: boolean;
+  /** Goes up each time the pane should call for attention. */
+  nudge: number;
   onPick: (design: Design) => void;
 }
 
 /** Step 1: which garment, and which design of it. */
-export default function GarmentPane({ chosen, fabric, scale, disabled, onPick }: Props) {
+export default function GarmentPane({ chosen, fabric, scale, disabled, nudge, onPick }: Props) {
+  const paneRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (!pane || nudge === 0) return;
+    // Taken off and put back, so the flash plays again on every nudge.
+    pane.classList.remove("pane--nudge");
+    void pane.offsetWidth;
+    pane.classList.add("pane--nudge");
+    pane.querySelector<HTMLButtonElement>("button.garment")?.focus({ preventScroll: true });
+  }, [nudge]);
+
   const [shownGender, setShownGender] = useState<Gender>(chosen?.gender ?? "male");
   const [shownType, setShownType] = useState(chosen?.typeId ?? CATALOGUE_TYPES[0].id);
 
   const designs = designsFor(shownGender, shownType);
 
   return (
-    <section className="pane pane--garment" aria-labelledby="garment-title">
+    <section ref={paneRef} className="pane pane--garment" aria-labelledby="garment-title">
       <header className="pane__head">
         <span className="pane__num" aria-hidden="true">
           1
