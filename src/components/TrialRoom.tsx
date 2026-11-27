@@ -153,7 +153,7 @@ export default function TrialRoom() {
   let statusLine = "";
   if (run.phase === "working") {
     const { stage } = run;
-    if (stage.step === "connecting") statusLine = "Connecting to the free AI server…";
+    if (stage.step === "connecting") statusLine = "Getting ready…";
     else if (stage.step === "queued") statusLine = `In the queue, ${stage.ahead} ahead of you…`;
     else statusLine = "Fitting the garment…";
   }
