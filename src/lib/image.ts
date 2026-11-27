@@ -3,7 +3,7 @@
  * travel fast on a phone connection and stay well inside the server limit.
  */
 
-export type PhotoKind = "person" | "garment";
+export type PhotoKind = "person" | "garment" | "fabric";
 
 export interface Photo {
   dataUrl: string;
@@ -24,6 +24,7 @@ interface Region {
 const PERSON_LONG_SIDE = 1280;
 const GARMENT_WIDTH = 768;
 const GARMENT_HEIGHT = 1024;
+const FABRIC_SIDE = 512;
 const MIN_SIDE = 200;
 const JPEG_QUALITY = 0.9;
 
@@ -45,6 +46,22 @@ function canvasOf(width: number, height: number) {
 function prepare(source: Source, region: Region, kind: PhotoKind): Photo {
   if (Math.min(region.width, region.height) < MIN_SIDE) {
     throw new Error("This photo is too small. Use a larger one.");
+  }
+
+  if (kind === "fabric") {
+    // The centre square: a swatch, worked at a size that keeps the weave.
+    const side = Math.min(region.width, region.height);
+    const { canvas, ctx } = canvasOf(FABRIC_SIDE, FABRIC_SIDE);
+    ctx.drawImage(
+      source,
+      region.x + (region.width - side) / 2, region.y + (region.height - side) / 2, side, side,
+      0, 0, FABRIC_SIDE, FABRIC_SIDE,
+    );
+    return {
+      dataUrl: canvas.toDataURL("image/jpeg", JPEG_QUALITY),
+      width: FABRIC_SIDE,
+      height: FABRIC_SIDE,
+    };
   }
 
   if (kind === "garment") {

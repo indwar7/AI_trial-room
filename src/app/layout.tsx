@@ -17,7 +17,7 @@ const sans = Jost({
 
 const title = "Mirror Fit · AI Trial Room";
 const description =
-  "Take a photo of a person and a photo of a garment, and see the garment fitted on them.";
+  "Choose a garment design, photograph the fabric and the customer, and see the garment fitted on them.";
 
 export const metadata: Metadata = {
   title,

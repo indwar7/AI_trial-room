@@ -1,7 +1,7 @@
 {
   "name": "Mirror Fit",
   "short_name": "Mirror Fit",
-  "description": "Take a photo of a person and a photo of a garment, and see the garment fitted on them.",
+  "description": "Choose a garment design, photograph the fabric and the customer, and see the garment fitted on them.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { CatalogueItem } from "@/lib/catalogue";
-import { findType, type Gender } from "@/lib/garments";
+import { DEFAULT_FABRIC_SCALE, type Design } from "@/lib/catalogue";
+import { garmentPhoto, type Fabric } from "@/lib/fabric";
+import { findType } from "@/lib/garments";
 import type { Photo } from "@/lib/image";
 import { inPhoneApp, sharePicture } from "@/lib/native";
 import { runTryOn, type Stage } from "@/lib/tryon";
+import DesignPreview from "./DesignPreview";
+import FabricPane from "./FabricPane";
 import GarmentPane from "./GarmentPane";
 import PhotoButtons from "./PhotoButtons";
 import { CheckIcon, DownloadIcon, HangerMark, PersonMark } from "./icons";
@@ -16,17 +19,18 @@ type Run =
   | { phase: "done"; url: string }
   | { phase: "error"; message: string };
 
-/** On a phone one step is on screen at a time; on a wide screen all three are. */
-type Step = "garment" | "person" | "result";
+/** On a phone one step is on screen at a time; on a wide screen all four are. */
+type Step = "garment" | "fabric" | "person" | "result";
 
 const STEPS: readonly { id: Step; label: string }[] = [
   { id: "garment", label: "Garment" },
+  { id: "fabric", label: "Fabric" },
   { id: "person", label: "Photo" },
   { id: "result", label: "Result" },
 ];
 
 const PICTURE_NAME = "mirror-fit-try-on.jpg";
-const NARROW = "(max-width: 1023px)";
+const NARROW = "(max-width: 1279px)";
 
 function clock(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -40,11 +44,11 @@ function watchNarrow(onChange: () => void): () => void {
 
 export default function TrialRoom() {
   const [person, setPerson] = useState<Photo | null>(null);
-  const [garment, setGarment] = useState<Photo | null>(null);
-  /** The catalogue garment in use. Null with a garment set means the store's own photo. */
-  const [chosen, setChosen] = useState<CatalogueItem | null>(null);
-  const [gender, setGender] = useState<Gender>("male");
-  const [typeId, setTypeId] = useState("shirt");
+  /** Which garment, in which design. */
+  const [design, setDesign] = useState<Design | null>(null);
+  /** What it is made in, and how big the fabric's pattern sits on it. */
+  const [fabric, setFabric] = useState<Fabric | null>(null);
+  const [scale, setScale] = useState(DEFAULT_FABRIC_SCALE);
   const [step, setStep] = useState<Step>("garment");
   const [run, setRun] = useState<Run>({ phase: "idle" });
   const [elapsed, setElapsed] = useState(0);
@@ -63,12 +67,11 @@ export default function TrialRoom() {
     () => false,
   );
 
-  const type = findType(typeId);
+  const type = design ? findType(design.typeId) : undefined;
   const busy = run.phase === "working";
-  const ready = person !== null && garment !== null && type !== undefined;
-  /** Trousers, skirts and dresses can only be fitted when the legs are in the photo. */
-  const wholeBody = garment !== null && type !== undefined && type.category !== "upper_body";
-  const garmentName = chosen ? chosen.name : garment ? "Your garment" : null;
+  const ready = person !== null && design !== null && fabric !== null && type !== undefined;
+  /** Trousers can only be fitted when the legs are in the photo. */
+  const wholeBody = type !== undefined && type.category !== "upper_body";
 
   useEffect(
     () => () => {
@@ -97,7 +100,7 @@ export default function TrialRoom() {
   }
 
   async function start() {
-    if (!person || !garment || !type || busy) return;
+    if (!person || !design || !fabric || !type || busy) return;
     const controller = new AbortController();
     inFlight.current = controller;
     const current = () => inFlight.current === controller && !controller.signal.aborted;
@@ -111,8 +114,8 @@ export default function TrialRoom() {
     try {
       const picture = await runTryOn({
         person,
-        garment,
-        gender,
+        garment: await garmentPhoto(design, fabric, scale),
+        gender: design.gender,
         type,
         signal: controller.signal,
         onStage: (stage) => {
@@ -163,8 +166,10 @@ export default function TrialRoom() {
   if (busy) main = { label: "Working…" };
   else if (ready) main = { label: run.phase === "done" ? "Try it on again" : "Try it on", act: start };
   else if (!narrow) main = { label: "Try it on" };
-  else if (!garment) {
+  else if (!design) {
     main = step === "garment" ? { label: "Choose a garment" } : { label: "Choose a garment", act: () => go("garment") };
+  } else if (!fabric) {
+    main = step === "fabric" ? { label: "Add the fabric" } : { label: "Next: fabric", act: () => go("fabric") };
   } else {
     main =
       step === "person"
@@ -172,13 +177,16 @@ export default function TrialRoom() {
         : { label: "Next: customer's photo", act: () => go("person") };
   }
 
-  let hint = "";
-  if (!garment && !person) hint = "Choose a garment and add the customer's photo.";
-  else if (!garment) hint = "Choose a garment.";
-  else if (!person) hint = "Add the customer's photo.";
+  const toDo = [
+    !design && "choose a garment",
+    !fabric && "add the fabric",
+    !person && "add the customer's photo",
+  ].filter(Boolean) as string[];
+  const hint = toDo.length > 0 ? `Still to do: ${toDo.join(", ")}.` : "";
 
   const finished: Record<Step, boolean> = {
-    garment: garment !== null,
+    garment: design !== null,
+    fabric: fabric !== null,
     person: person !== null,
     result: run.phase === "done",
   };
@@ -204,29 +212,28 @@ export default function TrialRoom() {
       </nav>
 
       <GarmentPane
-        garment={garment}
-        chosen={chosen}
-        gender={gender}
-        typeId={typeId}
+        chosen={design}
+        fabric={fabric}
+        scale={scale}
         disabled={busy}
-        onPick={(item, photo) => {
-          // A catalogue garment already says who it is for and what it is.
-          setGarment(photo);
-          setChosen(item);
-          setGender(item.gender);
-          setTypeId(item.typeId);
+        onPick={(picked) => {
+          setDesign(picked);
           clearResult();
         }}
-        onOwn={(photo, forGender, asTypeId) => {
-          setGarment(photo);
-          setChosen(null);
-          setGender(forGender);
-          setTypeId(asTypeId);
+      />
+
+      <FabricPane
+        design={design}
+        fabric={fabric}
+        scale={scale}
+        disabled={busy}
+        onFabric={(picked, itsScale) => {
+          setFabric(picked);
+          setScale(itsScale);
           clearResult();
         }}
-        onDetails={(forGender, asTypeId) => {
-          setGender(forGender);
-          setTypeId(asTypeId);
+        onScale={(next) => {
+          setScale(next);
           clearResult();
         }}
       />
@@ -234,7 +241,7 @@ export default function TrialRoom() {
       <section className="pane pane--person" aria-labelledby="person-title">
         <header className="pane__head">
           <span className="pane__num" aria-hidden="true">
-            2
+            3
           </span>
           <h2 id="person-title">The customer</h2>
         </header>
@@ -279,7 +286,7 @@ export default function TrialRoom() {
       <section className="pane pane--result" aria-labelledby="result-title">
         <header className="pane__head">
           <span className="pane__num" aria-hidden="true">
-            3
+            4
           </span>
           <h2 id="result-title">The fitted look</h2>
         </header>
@@ -372,7 +379,7 @@ export default function TrialRoom() {
                   </a>
                 )}
                 <button type="button" className="btn" onClick={() => go("garment")}>
-                  Another garment
+                  New garment
                 </button>
               </div>
             </>
@@ -387,15 +394,17 @@ export default function TrialRoom() {
 
       <div className="bar">
         <div className="bar__picks" aria-hidden="true">
-          <span className={garment ? "bar__thumb bar__thumb--filled" : "bar__thumb"}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {garment ? <img src={garment.dataUrl} alt="" /> : <HangerMark />}
+          <span className={design ? "bar__thumb bar__thumb--filled" : "bar__thumb"}>
+            {design ? (
+              <DesignPreview template={design.thumb} fabric={fabric} scale={scale} width={96} height={128} />
+            ) : (
+              <HangerMark />
+            )}
           </span>
           <span className={person ? "bar__thumb bar__thumb--filled" : "bar__thumb"}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {person ? <img src={person.dataUrl} alt="" /> : <PersonMark />}
           </span>
-          {garmentName && <span className="bar__name">{garmentName}</span>}
         </div>
         <div className="go">
           <button

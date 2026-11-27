@@ -1,6 +1,6 @@
 # Mirror Fit · AI Trial Room
 
-Take a photo of a person and a photo of a garment, say who is wearing it and what it is, and get back a picture of that person wearing the garment.
+Choose a garment design, photograph the fabric, photograph the customer, and get back a picture of the customer wearing that design made in that fabric.
 
 It is free to run: no AI API key and no billing. The browser sends the two photos straight to public AI demo servers on Hugging Face and shows the picture that comes back. The site keeps store logins and nothing else: no photos and no pictures.
 
@@ -16,21 +16,28 @@ Environment variables on Vercel: `BLOB_READ_WRITE_TOKEN` (added by the Blob stor
 
 The sign-in keeps other people out of the app. The try-on itself still runs between the browser and the public demo servers.
 
-## The catalogue
+## Garment, fabric, customer, result
 
-The trial room opens on the catalogue: 40 sample garments, five each of shirts, T-shirts, jackets and jeans, for men and for women. Picking one also tells the try-on who it is for and what it is, so only the customer's photo is left to add. A sixth tile takes the store's own garment, by camera or upload.
+The trial room has four parts. On a wide screen they sit side by side and nothing scrolls; on a phone they are four steps with the main button always at the bottom.
 
-On a wide screen the catalogue, the customer's photo and the result sit side by side and nothing scrolls. On a phone they are three steps with the main button always at the bottom.
+1. **The garment.** A catalogue of designs: five each of shirts, T-shirts, jackets and trousers, for men and for women. A design is a cut, not a finished garment: classic collar, mandarin collar, Nehru jacket, pleated trousers and so on.
+2. **The fabric.** A photo of the store's own fabric, taken or uploaded, or one of twelve samples. The moment a fabric is chosen, every design in the catalogue is shown made in it. A slider sets how big the fabric's pattern sits on the garment.
+3. **The customer.** A photo, taken or uploaded.
+4. **The fitted look.** The customer wearing that design in that fabric.
 
-- The list is in `src/lib/catalogue.ts`. Each garment is a 768 x 1024 photo on white in `public/catalogue/`, with a 384 x 512 copy in `public/catalogue/thumb/`.
-- To add a garment, put the two files there under a name like `men-shirt-6.jpg` and add a line to the list. For a new garment type, add it to `CATALOGUE_TYPES` as well, using a type id from `src/lib/garments.ts`.
-- The sample photos are computer-generated product shots, not real products of any brand. A store should replace them with photos of what it sells.
+### How a fabric becomes a garment
+
+This happens in the browser, in `src/lib/fabric.ts`, and costs nothing. Each design is a template: a picture whose transparency is the garment's outline and whose grey levels are its folds, seams and buttons. The fabric photo is evened out, mirrored so it repeats without a seam, laid across the picture, multiplied by the template and cut to its outline. That picture is what goes to the try-on server as the garment.
+
+- Designs are listed in `src/lib/catalogue.ts`; their templates are in `public/designs/` (768 x 1024, with half-size copies in `thumb/`).
+- To add a design, photograph or generate one plain medium-grey garment laid flat on white, run `python3 tools/make-design-template.py photo.jpg men-shirt-6`, and add a line to the list.
+- The sample fabrics in `public/fabrics/` were drawn by a script, and the design templates were made from computer-generated photos of plain grey garments. Neither shows a real product of any brand.
 
 ## The free limit
 
 The demo servers give each network (IP address) a free allowance of GPU time per day. Measured on 24 Nov 2026 it was 180 seconds, and one top used about 20 seconds of it. Everyone on the same Wi-Fi shares the allowance; a phone on mobile data has its own.
 
-Every garment type now runs on a server that asks for 60 seconds per try-on, so a run is refused once less than that is left. That should work out to six or seven try-ons a day per network; the figure is estimated from the numbers above, not counted.
+A try-on is refused once less allowance is left than the server asks for up front: 60 seconds for tops (IDM-VTON) and 90 seconds for trousers, skirts and dresses (OOTDiffusion, measured on 27 Nov 2026). That should work out to about six tops a day per network, or fewer when trousers are in the mix; the figures are estimated from these numbers, not counted.
 
 When the allowance runs out the site says so and, where the server gives one, shows the time until it resets.
 
@@ -51,12 +58,13 @@ A standard Next.js app. It needs the three environment variables listed under Lo
 
 | Path | Role |
 | --- | --- |
-| `src/components/TrialRoom.tsx` | The trial room: the three panes, the steps on a phone, the result |
+| `src/components/TrialRoom.tsx` | The trial room: the four panes, the steps on a phone, the result |
 | `src/components/CameraModal.tsx` | In-browser camera with a 3:4 viewfinder |
 | `src/lib/image.ts` | Shrinks photos in the browser before they are sent, and tidies the result |
 | `src/lib/garments.ts` | Garment types and which garment area each maps to |
-| `src/lib/catalogue.ts`, `src/components/GarmentPane.tsx` | The sample catalogue and the pane that shows it |
-| `src/components/PhotoButtons.tsx` | Camera and upload buttons, used for the customer and for the store's own garment |
+| `src/lib/catalogue.ts`, `src/components/GarmentPane.tsx` | The designs and the pane that shows them |
+| `src/lib/fabric.ts`, `src/components/FabricPane.tsx`, `DesignPreview.tsx` | Turning a fabric photo into a garment, and the fabric step |
+| `src/components/PhotoButtons.tsx` | Camera and upload buttons, used for the customer and for the fabric |
 | `src/lib/tryon.ts` | Calls the demo servers with `@gradio/client` |
 
 Three servers are used. Each garment goes to the first one in its row, and to the next if that one fails:
@@ -73,4 +81,4 @@ These are other people's public demos. They can be slow, queued, changed or take
 ## Photo tips
 
 - Person: one person, standing straight, facing the camera, head to hips in view.
-- Garment: laid flat or on a hanger, the whole garment in view, plain background.
+- Fabric: flat and close, filling the frame, in even light. A crease or a shadow in the photo will repeat across the garment.

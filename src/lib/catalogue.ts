@@ -1,19 +1,31 @@
 /**
- * The sample catalogue: garments a store can try on without photographing
- * anything. Each photo is a 768 x 1024 product shot on white in
- * public/catalogue, with a half-size copy in public/catalogue/thumb.
+ * What a store chooses from: garment designs, and sample fabrics to make
+ * them in.
+ *
+ * A design is a template, not a finished garment: a picture whose
+ * transparency is the garment's outline and whose grey levels are its folds
+ * and seams (public/designs, with half-size copies in public/designs/thumb).
+ * Laid over a fabric, it turns the fabric into that garment.
  */
 
 import type { Gender } from "./garments";
 
-export interface CatalogueItem {
+export interface Design {
   id: string;
   name: string;
   gender: Gender;
   /** A garment type id from garments.ts. */
   typeId: string;
-  image: string;
+  template: string;
   thumb: string;
+}
+
+export interface SampleFabric {
+  id: string;
+  name: string;
+  image: string;
+  /** How wide the swatch is on the garment, as a share of the garment photo's width. */
+  scale: number;
 }
 
 export const CATALOGUE_GENDERS: readonly { id: Gender; label: string }[] = [
@@ -25,64 +37,86 @@ export const CATALOGUE_TYPES: readonly { id: string; label: string }[] = [
   { id: "shirt", label: "Shirts" },
   { id: "tshirt", label: "T-shirts" },
   { id: "jacket", label: "Jackets" },
-  { id: "jeans", label: "Jeans" },
+  { id: "trousers", label: "Trousers" },
 ];
 
-function item(id: string, name: string): CatalogueItem {
+function design(id: string, name: string): Design {
   const [who, typeId] = id.split("-");
   return {
     id,
     name,
     gender: who === "men" ? "male" : "female",
     typeId,
-    image: `/catalogue/${id}.jpg`,
-    thumb: `/catalogue/thumb/${id}.jpg`,
+    template: `/designs/${id}.webp`,
+    thumb: `/designs/thumb/${id}.webp`,
   };
 }
 
-export const CATALOGUE: readonly CatalogueItem[] = [
-  item("men-shirt-1", "White formal shirt"),
-  item("men-shirt-2", "Light-blue Oxford shirt"),
-  item("men-shirt-3", "Navy checked shirt"),
-  item("men-shirt-4", "Olive linen shirt"),
-  item("men-shirt-5", "Black slim shirt"),
-  item("men-tshirt-1", "White crew-neck T-shirt"),
-  item("men-tshirt-2", "Black crew-neck T-shirt"),
-  item("men-tshirt-3", "Navy polo T-shirt"),
-  item("men-tshirt-4", "Grey melange T-shirt"),
-  item("men-tshirt-5", "Navy striped T-shirt"),
-  item("men-jacket-1", "Blue denim jacket"),
-  item("men-jacket-2", "Black leather jacket"),
-  item("men-jacket-3", "Olive bomber jacket"),
-  item("men-jacket-4", "Tan suede jacket"),
-  item("men-jacket-5", "Navy puffer jacket"),
-  item("men-jeans-1", "Mid-blue straight jeans"),
-  item("men-jeans-2", "Dark indigo slim jeans"),
-  item("men-jeans-3", "Black slim jeans"),
-  item("men-jeans-4", "Light-wash relaxed jeans"),
-  item("men-jeans-5", "Grey tapered jeans"),
-  item("women-shirt-1", "White cotton shirt"),
-  item("women-shirt-2", "Blush satin shirt"),
-  item("women-shirt-3", "Blue striped shirt"),
-  item("women-shirt-4", "Sage linen shirt"),
-  item("women-shirt-5", "Red checked shirt"),
-  item("women-tshirt-1", "White fitted T-shirt"),
-  item("women-tshirt-2", "Black V-neck T-shirt"),
-  item("women-tshirt-3", "Pink T-shirt"),
-  item("women-tshirt-4", "Breton striped T-shirt"),
-  item("women-tshirt-5", "Lavender T-shirt"),
-  item("women-jacket-1", "Light denim jacket"),
-  item("women-jacket-2", "Black leather jacket"),
-  item("women-jacket-3", "Beige utility jacket"),
-  item("women-jacket-4", "Pink bomber jacket"),
-  item("women-jacket-5", "Cream puffer jacket"),
-  item("women-jeans-1", "High-waist light jeans"),
-  item("women-jeans-2", "Dark blue skinny jeans"),
-  item("women-jeans-3", "Black skinny jeans"),
-  item("women-jeans-4", "Wide-leg blue jeans"),
-  item("women-jeans-5", "Grey straight jeans"),
+export const DESIGNS: readonly Design[] = [
+  design("men-shirt-1", "Classic collar"),
+  design("men-shirt-2", "Button-down, chest pocket"),
+  design("men-shirt-3", "Mandarin collar"),
+  design("men-shirt-4", "Half sleeve"),
+  design("men-shirt-5", "Camp collar"),
+  design("men-tshirt-1", "Crew neck"),
+  design("men-tshirt-2", "V-neck"),
+  design("men-tshirt-3", "Polo"),
+  design("men-tshirt-4", "Henley"),
+  design("men-tshirt-5", "Full sleeve"),
+  design("men-jacket-1", "Two-button blazer"),
+  design("men-jacket-2", "Bomber"),
+  design("men-jacket-3", "Nehru jacket"),
+  design("men-jacket-4", "Trucker"),
+  design("men-jacket-5", "Zip jacket"),
+  design("men-trousers-1", "Straight"),
+  design("men-trousers-2", "Slim tapered"),
+  design("men-trousers-3", "Pleated formal"),
+  design("men-trousers-4", "Relaxed"),
+  design("men-trousers-5", "Five-pocket"),
+  design("women-shirt-1", "Classic collar"),
+  design("women-shirt-2", "Band collar"),
+  design("women-shirt-3", "Oversized"),
+  design("women-shirt-4", "Short sleeve"),
+  design("women-shirt-5", "Sleeveless"),
+  design("women-tshirt-1", "Crew neck"),
+  design("women-tshirt-2", "V-neck"),
+  design("women-tshirt-3", "Polo"),
+  design("women-tshirt-4", "Boat neck"),
+  design("women-tshirt-5", "Full sleeve"),
+  design("women-jacket-1", "Blazer"),
+  design("women-jacket-2", "Cropped jacket"),
+  design("women-jacket-3", "Bomber"),
+  design("women-jacket-4", "Trucker"),
+  design("women-jacket-5", "Long blazer"),
+  design("women-trousers-1", "Straight"),
+  design("women-trousers-2", "Slim"),
+  design("women-trousers-3", "Wide leg"),
+  design("women-trousers-4", "Tapered"),
+  design("women-trousers-5", "Flared"),
 ];
 
-export function catalogueFor(gender: Gender, typeId: string): readonly CatalogueItem[] {
-  return CATALOGUE.filter((entry) => entry.gender === gender && entry.typeId === typeId);
+export function designsFor(gender: Gender, typeId: string): readonly Design[] {
+  return DESIGNS.filter((entry) => entry.gender === gender && entry.typeId === typeId);
 }
+
+/** A swatch photographed close up covers about this much of the garment. */
+export const DEFAULT_FABRIC_SCALE = 0.3;
+
+function sample(id: string, name: string, scale = DEFAULT_FABRIC_SCALE): SampleFabric {
+  return { id, name, image: `/fabrics/${id}.jpg`, scale };
+}
+
+export const SAMPLE_FABRICS: readonly SampleFabric[] = [
+  sample("white-poplin", "White poplin"),
+  sample("sky-oxford", "Sky Oxford"),
+  sample("blue-stripe", "Blue stripe", 0.32),
+  sample("navy-gingham", "Navy gingham", 0.22),
+  sample("red-tartan", "Red tartan", 0.34),
+  sample("olive-linen", "Olive linen"),
+  sample("khaki-twill", "Khaki twill"),
+  sample("indigo-denim", "Indigo denim"),
+  sample("charcoal-flannel", "Charcoal flannel"),
+  sample("navy-pinstripe", "Navy pinstripe"),
+  sample("grey-check", "Grey check"),
+  sample("black-twill", "Black twill"),
+];

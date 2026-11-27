@@ -71,3 +71,12 @@ export const HangerMark = (p: SVGProps<SVGSVGElement>) => (
     <path d="M24 17 5.500 31.500c-1.500 1.200-.7 3.500 1.200 3.500h34.600c1.900 0 2.700-2.300 1.200-3.500z" />
   </Icon>
 );
+
+/** Placeholder swatch for the fabric step: a square of cloth with one corner turned up. */
+export const SwatchMark = (p: SVGProps<SVGSVGElement>) => (
+  <Icon width="56" height="56" viewBox="0 0 48 48" strokeWidth="1" {...p}>
+    <path d="M8 8h32v22L30 40H8z" />
+    <path d="M40 30H30v10" />
+    <path d="M8 18h32M8 28h22M18 8v32M28 8v22" opacity=".45" />
+  </Icon>
+);

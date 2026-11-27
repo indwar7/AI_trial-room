@@ -112,17 +112,20 @@ body {
 }
 
 /* ── The trial room ───────────────────────────────────────────────────
-   Three panes side by side on a wide screen, so nothing needs scrolling.
-   On a phone the same three panes are steps, one on screen at a time,
-   with the main button always at the bottom. */
+   Four panes side by side on a wide screen, so nothing needs scrolling:
+   the garment, the fabric, the customer, the fitted look. On anything
+   narrower the same four are steps, one on screen at a time, with the main
+   button always at the bottom. */
 .studio {
-  --stage-max: min(54dvh, 540px);
+  /* A picture area never pushes the main button off a short screen. */
+  --stage-max: min(54dvh, 540px, calc(100dvh - 340px));
   display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto;
   min-height: calc(100dvh - 60px);
   padding: 0 16px;
 }
 .pane { min-width: 0; display: none; flex-direction: column; padding: 18px 0 22px; }
 .studio[data-step="garment"] > .pane--garment,
+.studio[data-step="fabric"] > .pane--fabric,
 .studio[data-step="person"] > .pane--person,
 .studio[data-step="result"] > .pane--result { display: flex; }
 
@@ -139,15 +142,15 @@ body {
 /* Steps (phone) */
 .steps {
   position: sticky; top: 0; z-index: 6;
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(4, 1fr);
   margin: 0 -16px;
   background: var(--white); border-bottom: 1px solid var(--line);
 }
 .steps__item {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 50px; padding: 0 6px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 50px; padding: 0 2px;
   border: 0; border-bottom: 2px solid transparent; background: transparent; cursor: pointer;
-  font-family: var(--sans); font-size: 14.5px; color: var(--muted);
+  font-family: var(--sans); font-size: 14px; color: var(--muted);
 }
 .steps__item[aria-current="step"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 500; }
 .steps__item:disabled { cursor: not-allowed; }
@@ -159,18 +162,23 @@ body {
 }
 .steps__num svg { width: 12px; height: 12px; stroke-width: 2.4; }
 .steps__num:has(svg) { background: var(--ink); border-color: var(--ink); color: var(--ivory); }
+@media (max-width: 379px) {
+  .steps__item { font-size: 13px; }
+  .steps__num { width: 18px; height: 18px; font-size: 11px; }
+}
 
 /* A picture area: 3:4 where there is room, shorter where there is not.
    The picture is always shown whole. */
 .stage {
   position: relative; overflow: hidden;
-  width: 100%; aspect-ratio: 3 / 4; max-height: var(--stage-max); min-height: 200px;
+  width: 100%; aspect-ratio: 3 / 4; max-height: var(--stage-max); min-height: 160px;
   background: var(--ivory-2);
   border: 1px solid var(--line); border-radius: var(--r);
 }
 .stage--filled { background: var(--white); border-color: var(--line-2); }
 .stage__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
 .stage__img--waiting { opacity: 0.45; filter: grayscale(0.4); }
+.stage__img--cover { object-fit: cover; }
 .stage__empty {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
@@ -261,8 +269,7 @@ button.garment:disabled { cursor: default; }
   aspect-ratio: 3 / 4;
   background: var(--ivory-2);
 }
-/* The photos are on white; multiplying sits them on the tile's own colour. */
-.garment__photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+.garment__photo canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .garment__wait {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
@@ -281,29 +288,21 @@ button.garment:disabled { cursor: default; }
   border-top: 1px solid var(--line);
   font-size: 14px; line-height: 1.25;
 }
-.garment--own { border-style: dashed; border-color: var(--line-2); }
-.garment--own.garment--chosen { border-style: solid; border-color: var(--ink); }
-.garment__own-empty {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  padding: 10px; text-align: center;
-  font-size: 14px; line-height: 1.3; color: var(--ink-2);
-}
-.garment__own-empty svg { width: 44px; height: 44px; margin-bottom: 4px; color: var(--gold); }
-.garment__own-empty small { font-size: 12.5px; color: var(--muted); }
-
-.own-details {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
-  margin-top: 14px; padding: 10px 14px;
-  background: var(--ivory-2); border: 1px solid var(--line); border-radius: var(--r);
-  font-size: 14.5px;
-}
-.own-details select {
-  min-height: 40px; padding: 0 10px;
-  font-family: var(--sans); font-size: 15px; color: var(--ink);
+/* Fabric: the samples, and how big the pattern sits on the garment */
+.pane--fabric { --stage-max: min(40dvh, 420px, calc(100dvh - 452px)); }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; margin-top: 14px; }
+.swatch {
+  position: relative; aspect-ratio: 1; padding: 0; overflow: hidden; cursor: pointer;
   background: var(--white);
   border: 1px solid var(--line-2); border-radius: var(--r);
 }
+.swatch img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.swatch[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+.swatch:disabled { cursor: default; }
+.swatch--own { border-color: var(--gold); }
+.size { display: flex; align-items: center; gap: 12px; margin-top: 12px; font-size: 13.5px; color: var(--ink-2); }
+.size input { flex: 1 1 auto; min-width: 0; min-height: 36px; accent-color: var(--ink); }
+.size--off { opacity: 0.45; }
 
 /* The main button: at the bottom of the screen on a phone */
 .bar {
@@ -322,34 +321,38 @@ button.garment:disabled { cursor: default; }
 }
 .bar__thumb svg { width: 24px; height: 24px; }
 .bar__thumb img { width: 100%; height: 100%; object-fit: cover; }
+.bar__thumb canvas { width: 100%; height: 100%; object-fit: contain; }
 .bar__thumb--filled { background: var(--white); border-color: var(--ink); }
-.bar__name, .bar__hint { display: none; }
+.bar__hint { display: none; }
 .bar .btn--large { min-height: 50px; }
+@media (max-width: 379px) {
+  /* No room for the two small pictures beside the longest button labels. */
+  .bar { grid-template-columns: minmax(0, 1fr); }
+  .bar__picks { display: none; }
+}
 
 /* Phones: three across, so a whole shelf is on the screen at once. */
 @media (min-width: 360px) and (max-width: 619px) {
   .shelf { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .garment__name { padding: 6px 8px; font-size: 13px; }
   .garment__tick { top: 6px; right: 6px; width: 22px; height: 22px; }
-  .garment__own-empty { font-size: 13px; }
-  .garment__own-empty svg { width: 34px; height: 34px; }
 }
 
-@media (min-width: 620px) and (max-width: 1023px) {
+@media (min-width: 620px) and (max-width: 1279px) {
   .studio { max-width: 760px; margin: 0 auto; }
   .shelf { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .pane--person, .pane--result { width: min(100%, 440px); margin: 0 auto; }
+  .pane--fabric, .pane--person, .pane--result { width: min(100%, 440px); margin: 0 auto; }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .steps { display: none; }
   .studio {
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr) minmax(0, 1.1fr);
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.05fr);
     grid-template-rows: auto minmax(0, 1fr);
-    align-items: start; gap: 14px 18px;
-    max-width: 1480px; margin: 0 auto;
-    height: calc(100dvh - 60px); min-height: 540px;
-    padding: 18px clamp(18px, 2.4vw, 32px);
+    align-items: start; gap: 14px 16px;
+    max-width: 1640px; margin: 0 auto;
+    height: calc(100dvh - 60px); min-height: 560px;
+    padding: 18px clamp(16px, 2vw, 32px);
   }
   .pane {
     display: flex; padding: 18px;
@@ -358,25 +361,32 @@ button.garment:disabled { cursor: default; }
   }
   .pane__head { display: flex; }
   .pane--garment { grid-column: 1; grid-row: 1 / 3; align-self: stretch; min-height: 0; }
+  .pane--fabric { grid-column: 2; grid-row: 1 / 3; }
+  .pane--fabric .stage { max-height: calc(100dvh - 440px); }
   /* The button sits under the customer's photo, where the eye is when the
      photo goes in; the result then has its whole column. */
-  .pane--person { grid-column: 2; grid-row: 1; }
+  .pane--person { grid-column: 3; grid-row: 1; }
   .pane--person .stage { max-height: calc(100dvh - 376px); }
-  .pane--result { grid-column: 3; grid-row: 1 / 3; }
+  .pane--result { grid-column: 4; grid-row: 1 / 3; }
   .pane--result .stage { max-height: calc(100dvh - 306px); }
   .shelf {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     flex: 1 1 auto; min-height: 0; overflow-y: auto; align-content: start;
   }
-  /* A touch shorter than 3:4, so two rows fit a laptop screen. */
-  .garment__photo { aspect-ratio: 4 / 5; }
+  .garment__name { font-size: 13.5px; padding: 6px 10px; }
+  .swatches { grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 7px; }
+  .photo-buttons__row .btn { padding: 0 6px; letter-spacing: 0.1em; }
+  .photo-buttons__row .btn svg { display: none; }
   .bar {
     position: static; display: block;
-    grid-column: 2; grid-row: 2;
+    grid-column: 3; grid-row: 2;
     margin: 0; padding: 0; background: transparent; border: 0;
   }
   .bar__picks { display: none; }
   .bar__hint { display: block; margin-top: 8px; text-align: center; font-size: 13.5px; color: var(--muted); }
+}
+@media (min-width: 1500px) {
+  .photo-buttons__row .btn svg { display: inline; }
 }
 
 /* ── Result ───────────────────────────────────────────────────────── */

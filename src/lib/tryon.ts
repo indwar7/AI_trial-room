@@ -86,7 +86,7 @@ const IDM_VTON: Server = {
   }),
 };
 
-/** OOTDiffusion. Trousers, skirts and dresses, on the same light allowance as a top. */
+/** OOTDiffusion. Trousers, skirts and dresses, for half the allowance Leffa asks for. */
 const OOTD_FULL_BODY: Server = {
   space: "levihsu/OOTDiffusion",
   endpoint: "/process_dc",
@@ -153,6 +153,10 @@ function resetIn(raw: string): string {
   if (!m) return " Try again tomorrow.";
   const hours = Number(m[1]);
   const minutes = Number(m[2]);
+  if (hours === 0 && minutes === 0) {
+    // "0:00:00" comes with an empty allowance and means no time is known.
+    return Number(m[3]) === 0 ? " Try again later." : " Try again in a minute.";
+  }
   const parts = [hours > 0 && `${hours} h`, `${minutes} min`].filter(Boolean);
   return ` They reset in ${parts.join(" ")}.`;
 }
